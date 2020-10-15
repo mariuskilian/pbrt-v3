@@ -45,31 +45,29 @@
 namespace pbrt {
 
 // OcteeAccel Declarations
-struct OctreeNode;
 
 class OctreeAccel : public Aggregate {
   public:
     // KdTreeAccel Public Methods
     OctreeAccel(std::vector<std::shared_ptr<Primitive>> p);
-    Bounds3f WorldBound() const { return bounds; }
+    Bounds3f WorldBound() const { return wb; }
     ~OctreeAccel();
     bool Intersect(const Ray &ray, SurfaceInteraction *isect) const;
     bool IntersectP(const Ray &ray) const;
 
   private:
-    // OctreeAccel Private Methods
-    void buildTree();
 
     // OctreeAccel Private Data
     std::vector<std::shared_ptr<Primitive>> primitives;
-    std::vector<int> primitiveIndices;
-    OctreeNode *nodes;
-    int nAllocedNodes, nextFreeNode;
-    Bounds3f bounds;
-};
+    Bounds3f wb; // World Bounds
+    
+    Bounds3f octreeDivide(Bounds3f bounds, int idx);
+    void Recurse(int offset, std::vector<std::shared_ptr<Primitive>> primitives, Bounds3f bounds, int depth);
+    void lh_dump_rec(FILE *f, uint *vcnt_, int offset, Bounds3f bounds);
+    void lh_dump(const char *path);
 
-struct OcToDo {
-    const OctreeNode *node;
+    std::vector<uint32_t> nodes, sizes; 
+    std::vector<std::shared_ptr<Primitive>> leaves;
 };
 
 std::shared_ptr<OctreeAccel> CreateOctreeAccelerator(

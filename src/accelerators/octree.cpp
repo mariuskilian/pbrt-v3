@@ -40,41 +40,34 @@
 
 namespace pbrt {
 
-// FRAGEN
-// - ist bei sizes der default wert 0?
-// - kann man sizes kleiner machen (viele 0en)?
-// - wie zeigt leaves auf die primitive? was wenn mehrere primitive im knoten?
-// - wie speicher ich bounding boxes? noch ein vector?
-// - wie greife ich auf den raum zu, den ich aufteile? min/max xyz?
-// - Kann ich if-Bedingung fuer bounds vereinfachen?
-// - greif ich korrekt und auf die richtigen bounds zu? aka ist prim.WorldBound das prim aabb?
+// - aabb bauen indem ich durch alle primitive iteriere - quadratisch machen - kann auch mal ohne testen
 
-const int MAX_DEPTH = 10;
-std::vector<uint32_t> nodes, sizes; 
-std::vector<std::shared_ptr<Primitive>> leaves;
+const int MAX_DEPTH = 4;
 
 bool isOverlapping(Float min1, Float max1, Float min2, Float max2) {
     return max1 >= min2 && max2 >= min1;
 }
 
-Bounds3f octreeDivide(Bounds3f bounds, int idx) {
-    Float xHalf = (bounds.pMin.x + bounds.pMax.x) / 2;
-    Float yHalf = (bounds.pMin.y + bounds.pMax.y) / 2;
-    Float zHalf = (bounds.pMin.z + bounds.pMax.z) / 2;
+Bounds3f OctreeAccel::octreeDivide(Bounds3f b, int idx) {
+    Float xHalf = (b.pMin.x + b.pMax.x) / 2;
+    Float yHalf = (b.pMin.y + b.pMax.y) / 2;
+    Float zHalf = (b.pMin.z + b.pMax.z) / 2;
 
-    if (idx % 2 == 0) bounds.pMin.x = xHalf;
-    else bounds.pMax.x = xHalf;
+    if ((idx & 1) == 0) b.pMin.x = xHalf;
+    else b.pMax.x = xHalf;
 
-    if ((idx >> 1) % 2 == 0) bounds.pMin.y = yHalf;
-    else bounds.pMax.y = yHalf;
+    if ((idx & 2) == 0) b.pMin.y = yHalf;
+    else b.pMax.y = yHalf;
 
-    if ((idx >> 2) % 2 == 0) bounds.pMin.z = zHalf;
-    else bounds.pMax.z = zHalf;
+    if ((idx & 4) == 0) b.pMin.z = zHalf;
+    else b.pMax.z = zHalf;
 
-    return bounds;
+    return b;
 }
 
-void Recurse(int offset, std::vector<std::shared_ptr<Primitive>> primitives, Bounds3f bounds, int depth) {
+void OctreeAccel::Recurse(int offset, std::vector<std::shared_ptr<Primitive>> primitives, Bounds3f bounds, int depth) {
+    if (depth > MAX_DEPTH) return;
+
     std::vector<std::shared_ptr<Primitive>> prims;
     for (int i = 0; i < primitives.size(); i++) {
         std::shared_ptr<Primitive> p = primitives.at(i);
@@ -87,35 +80,98 @@ void Recurse(int offset, std::vector<std::shared_ptr<Primitive>> primitives, Bou
     }
 
     if (prims.size() > 1 && depth <= MAX_DEPTH) { // Inner node
+        uint32_t offset_children = nodes.size();
+
         std::vector<uint32_t> nodes_children = {0, 0, 0, 0, 0, 0, 0, 0};
         std::vector<uint32_t> sizes_children = {0, 0, 0, 0, 0, 0, 0, 0};
         nodes.insert(nodes.end(), nodes_children.begin(), nodes_children.end());
         sizes.insert(sizes.end(), sizes_children.begin(), sizes_children.end());
 
-        uint32_t offset_children = nodes.size();
         nodes[offset] = offset_children << 1 | 0;
-        for (int i = 0; i < 8; i++) {
-            Recurse(offset_children, prims, octreeDivide(bounds, i), depth + 1);
+        for (uint32_t i = 0; i < 8; i++) {
+            Recurse(offset_children + i, prims, octreeDivide(bounds, i), depth + 1);
         }
     } else { // Leaf node
+        uint32_t offset_leaves = leaves.size();
+
         leaves.insert(leaves.end(), prims.begin(), prims.end());
 
-        uint32_t offset_leaves = leaves.size();
         nodes[offset] = offset_leaves << 1 | 1;
         sizes[offset] = prims.size();
     }
 }
 
-// KdTreeAccel Method Definitions
-OctreeAccel::OctreeAccel(std::vector<std::shared_ptr<Primitive>> p)
-    : primitives(std::move(p)) {
+// Code to visualize octree
+void OctreeAccel::lh_dump_rec(FILE *f, uint *vcnt_, int offset, Bounds3f bounds) {
 
-    // Start recursive construction of kd-tree
-    // buildTree(0, bounds, primBounds, primNums.get(), primitives.size(),
-    //           maxDepth, edges, prims0.get(), prims1.get());
+    // Vertices ausgeben
+    for(uint i = 0; i < 8; i++)
+    {
+        Float x = ((i & 1) == 0) ? bounds.pMin.x : bounds.pMax.x;
+        Float y = ((i & 2) == 0) ? bounds.pMin.x : bounds.pMax.x;
+        Float z = ((i & 4) == 0) ? bounds.pMin.x : bounds.pMax.x;
+        fprintf(f, "v %f %f %f\n", x, y, z);
+    }
+
+    // Vertex indices ausgeben
+    uint vcnt = *vcnt_;
+    fprintf(f, "f %d %d %d %d\n", vcnt    , vcnt + 1, vcnt + 5, vcnt + 4);//bottom
+    fprintf(f, "f %d %d %d %d\n", vcnt + 2, vcnt + 3, vcnt + 7, vcnt + 6);//top
+    fprintf(f, "f %d %d %d %d\n", vcnt    , vcnt + 1, vcnt + 3, vcnt + 2);//front
+    fprintf(f, "f %d %d %d %d\n", vcnt + 4, vcnt + 5, vcnt + 7, vcnt + 6);//back
+    fprintf(f, "f %d %d %d %d\n", vcnt    , vcnt + 4, vcnt + 6, vcnt + 2);//left
+    fprintf(f, "f %d %d %d %d\n", vcnt + 1, vcnt + 5, vcnt + 7, vcnt + 3);//right
+    //fprintf(f, "l %d %d\n", vcnt + 8, vcnt + 10);
+    *vcnt_ += 8;
+
+    // Rekursion
+    if ((offset & 1) == 0) { // Inner node
+        for (uint32_t i = 0; i < 8; i++) {
+            lh_dump_rec(f, vcnt_, nodes[offset + i] >> 1, octreeDivide(bounds, i));
+        }
+    } else { // Leaf node
+        Float x = (bounds.pMin.x + bounds.pMax.x) / 2.0;
+        Float y = (bounds.pMin.y + bounds.pMax.y) / 2.0;
+        Float z = (bounds.pMin.z + bounds.pMax.z) / 2.0;
+        fprintf(f, "v, %f %f %f\n", x, y, z);
+        *vcnt_ += 1;
+        return;
+    }
 }
 
-OctreeAccel::~OctreeAccel() { FreeAligned(nodes); }
+void OctreeAccel::lh_dump(const char *path) {
+    FILE *f = fopen(path, "wb");
+    uint vcnt = 1;
+    lh_dump_rec(f, &vcnt, 0, WorldBound());
+    fclose(f);
+}
+
+// KdTreeAccel Method Definitions
+OctreeAccel::OctreeAccel(std::vector<std::shared_ptr<Primitive>> p) : primitives(std::move(p)) {
+    primitives = p;
+
+    wb.pMin.x = wb.pMax.x = 0;
+    wb.pMin.y = wb.pMax.y = 0;
+    wb.pMin.z = wb.pMax.z = 0;
+
+    for (int i = 0; i < primitives.size(); i++) {
+        Bounds3f b = primitives.at(i)->WorldBound();
+
+        if (b.pMin.x < wb.pMin.x) wb.pMin.x = b.pMin.x;
+        if (b.pMin.y < wb.pMin.y) wb.pMin.y = b.pMin.y;
+        if (b.pMin.z < wb.pMin.z) wb.pMin.z = b.pMin.z;
+
+        if (b.pMax.x > wb.pMax.x) wb.pMax.x = b.pMax.x;
+        if (b.pMax.y > wb.pMax.y) wb.pMax.y = b.pMax.y;
+        if (b.pMax.z > wb.pMax.z) wb.pMax.z = b.pMax.z;
+    }
+
+    Recurse(0, p, wb, 0);
+    lh_dump("/Users/marius/visualization.obj");
+}
+
+OctreeAccel::~OctreeAccel() { //FreeAligned(nodes2);
+}
 
 bool OctreeAccel::Intersect(const Ray &ray, SurfaceInteraction *isect) const {
     ProfilePhase p(Prof::AccelIntersect);
