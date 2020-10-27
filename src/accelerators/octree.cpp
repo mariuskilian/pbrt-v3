@@ -40,33 +40,23 @@
 
 namespace pbrt {
 
-// - aabb bauen indem ich durch alle primitive iteriere - quadratisch machen - kann auch mal ohne testen
-
-const int MAX_DEPTH = 4;
+const int MAX_DEPTH = 15;
+const int MAX_PRIMS = 30;
 
 bool isOverlapping(Float min1, Float max1, Float min2, Float max2) {
     return max1 >= min2 && max2 >= min1;
 }
 
 Bounds3f OctreeAccel::octreeDivide(Bounds3f b, int idx) {
-    Float xHalf = (b.pMin.x + b.pMax.x) / 2;
-    Float yHalf = (b.pMin.y + b.pMax.y) / 2;
-    Float zHalf = (b.pMin.z + b.pMax.z) / 2;
-
-    if ((idx & 1) == 0) b.pMin.x = xHalf;
-    else b.pMax.x = xHalf;
-
-    if ((idx & 2) == 0) b.pMin.y = yHalf;
-    else b.pMax.y = yHalf;
-
-    if ((idx & 4) == 0) b.pMin.z = zHalf;
-    else b.pMax.z = zHalf;
-
+    for (int i = 0; i < 3; i++) {
+        Float axisHalf = (b.pMin[i] + b.pMax[i]) / 2;
+        if ((idx & (int)pow(2,i)) == 0) b.pMax[i] = axisHalf;
+        else b.pMin[i] = axisHalf;
+    }
     return b;
 }
 
-void OctreeAccel::Recurse(int offset, std::vector<std::shared_ptr<Primitive>> primitives, Bounds3f bounds, int depth) {
-    if (depth > MAX_DEPTH) return;
+void OctreeAccel::Recurse(int offset, std::vector<std::shared_ptr<Primitive>> primitives, Bounds3f bounds, int depth) {        
 
     std::vector<std::shared_ptr<Primitive>> prims;
     for (int i = 0; i < primitives.size(); i++) {
@@ -79,7 +69,7 @@ void OctreeAccel::Recurse(int offset, std::vector<std::shared_ptr<Primitive>> pr
         }
     }
 
-    if (prims.size() > 1 && depth <= MAX_DEPTH) { // Inner node
+    if (prims.size() > MAX_PRIMS && depth <= MAX_DEPTH) { // Inner node
         uint32_t offset_children = nodes.size();
 
         std::vector<uint32_t> nodes_children = {0, 0, 0, 0, 0, 0, 0, 0};
@@ -101,59 +91,14 @@ void OctreeAccel::Recurse(int offset, std::vector<std::shared_ptr<Primitive>> pr
     }
 }
 
-// Code to visualize octree
-void OctreeAccel::lh_dump_rec(FILE *f, uint *vcnt_, int offset, Bounds3f bounds) {
-
-    // Vertices ausgeben
-    for(uint i = 0; i < 8; i++)
-    {
-        Float x = ((i & 1) == 0) ? bounds.pMin.x : bounds.pMax.x;
-        Float y = ((i & 2) == 0) ? bounds.pMin.x : bounds.pMax.x;
-        Float z = ((i & 4) == 0) ? bounds.pMin.x : bounds.pMax.x;
-        fprintf(f, "v %f %f %f\n", x, y, z);
-    }
-
-    // Vertex indices ausgeben
-    uint vcnt = *vcnt_;
-    fprintf(f, "f %d %d %d %d\n", vcnt    , vcnt + 1, vcnt + 5, vcnt + 4);//bottom
-    fprintf(f, "f %d %d %d %d\n", vcnt + 2, vcnt + 3, vcnt + 7, vcnt + 6);//top
-    fprintf(f, "f %d %d %d %d\n", vcnt    , vcnt + 1, vcnt + 3, vcnt + 2);//front
-    fprintf(f, "f %d %d %d %d\n", vcnt + 4, vcnt + 5, vcnt + 7, vcnt + 6);//back
-    fprintf(f, "f %d %d %d %d\n", vcnt    , vcnt + 4, vcnt + 6, vcnt + 2);//left
-    fprintf(f, "f %d %d %d %d\n", vcnt + 1, vcnt + 5, vcnt + 7, vcnt + 3);//right
-    //fprintf(f, "l %d %d\n", vcnt + 8, vcnt + 10);
-    *vcnt_ += 8;
-
-    // Rekursion
-    if ((offset & 1) == 0) { // Inner node
-        for (uint32_t i = 0; i < 8; i++) {
-            lh_dump_rec(f, vcnt_, nodes[offset + i] >> 1, octreeDivide(bounds, i));
-        }
-    } else { // Leaf node
-        Float x = (bounds.pMin.x + bounds.pMax.x) / 2.0;
-        Float y = (bounds.pMin.y + bounds.pMax.y) / 2.0;
-        Float z = (bounds.pMin.z + bounds.pMax.z) / 2.0;
-        fprintf(f, "v, %f %f %f\n", x, y, z);
-        *vcnt_ += 1;
-        return;
-    }
-}
-
-void OctreeAccel::lh_dump(const char *path) {
-    FILE *f = fopen(path, "wb");
-    uint vcnt = 1;
-    lh_dump_rec(f, &vcnt, 0, WorldBound());
-    fclose(f);
-}
-
 // KdTreeAccel Method Definitions
 OctreeAccel::OctreeAccel(std::vector<std::shared_ptr<Primitive>> p) : primitives(std::move(p)) {
-    primitives = p;
 
     wb.pMin.x = wb.pMax.x = 0;
     wb.pMin.y = wb.pMax.y = 0;
     wb.pMin.z = wb.pMax.z = 0;
 
+    // Determine world bounds
     for (int i = 0; i < primitives.size(); i++) {
         Bounds3f b = primitives.at(i)->WorldBound();
 
@@ -166,8 +111,28 @@ OctreeAccel::OctreeAccel(std::vector<std::shared_ptr<Primitive>> p) : primitives
         if (b.pMax.z > wb.pMax.z) wb.pMax.z = b.pMax.z;
     }
 
-    Recurse(0, p, wb, 0);
-    lh_dump("/Users/marius/visualization.obj");
+    // Set all dimension sizes of World Bounds to same size
+    Float x = wb.pMax.x - wb.pMin.x;
+    Float y = wb.pMax.y - wb.pMin.y;
+    Float z = wb.pMax.z - wb.pMin.z;
+
+    Float dMax = (x > y) ? ((x > z) ? x : z) : (y > z) ? y : z;
+    Float dX = (dMax - x) / 2;
+    Float dY = (dMax - y) / 2;
+    Float dZ = (dMax - z) / 2;
+
+    wb.pMin.x -= dX;
+    wb.pMin.y -= dY;
+    wb.pMin.z -= dZ;
+    
+    wb.pMax.x += dX;
+    wb.pMax.y += dY;
+    wb.pMax.z += dZ;
+
+    nodes.push_back(0);
+    sizes.push_back(0);
+    Recurse(0, primitives, wb, 0);
+    lh_dump("visualization.obj");
 }
 
 OctreeAccel::~OctreeAccel() { //FreeAligned(nodes2);
@@ -175,24 +140,163 @@ OctreeAccel::~OctreeAccel() { //FreeAligned(nodes2);
 
 bool OctreeAccel::Intersect(const Ray &ray, SurfaceInteraction *isect) const {
     ProfilePhase p(Prof::AccelIntersect);
-    // Compute initial parametric range of ray inside kd-tree extent
 
-    // Prepare to traverse kd-tree for ray
+    Point3f pnt;
+    Float length;
+    
+    // Check intersection with outer planes of WorldBound
+    for (int i = 0; i < 6; i++) { // X=0,1; Y=2,3; Z=4,5; Even=Min; Odd=max
+        int axis = i / 2; //axis: 0=x; 1=y; 2=z
+        bool min = i % 2 == 0; //min: true=min; false=max
 
-    // Traverse kd-tree nodes in order for ray
+        if (ray.d[axis] == 0) continue;
+
+        // Determine factor for formula: point = origin + factor * direction
+        Float factor = (min) ? wb.pMin[axis] : wb.pMax[axis];
+        factor = (factor - ray.o[axis]) / ray.d[axis];
+
+        if (factor < 0) continue; // Intersection is behind ray
+
+        Point3f pnt_tmp = ray.o + factor * ray.d; // The newly found point of intersection
+
+        // Check if its within the World Bound box
+        int otherAxis1 = (axis + 1) % 2;
+        int otherAxis2 = (axis + 2) % 2;
+        if (pnt_tmp[otherAxis1] > wb.pMax[otherAxis1] ||
+            pnt_tmp[otherAxis2] > wb.pMax[otherAxis2] ||
+            pnt_tmp[otherAxis1] < wb.pMin[otherAxis1] ||
+            pnt_tmp[otherAxis2] < wb.pMin[otherAxis2]) {
+                continue; 
+        }
+
+        // If its closer than any previously determined point then make this the saved point of intersection
+        if (length == 0 || factor * ray.d.Length() < length) {
+            pnt = ray.o + factor * ray.d;
+            length = factor * ray.d.Length();
+        }
+    }
+
+    if (length == 0) return false;
+
+    //return RecurseIntersection(ray, isect, wb, pnt, 0);
+
     return false;
+}
+
+bool OctreeAccel::RecurseIntersection(const Ray &ray, SurfaceInteraction *isect,
+        Bounds3f bounds, Point3f point, int offset) {
+
+    // Figure out which child (index) the point is touching
+    int nodeIdx;
+    for (int i = 0; i < 3; i++) {
+        Float axisHalf = (bounds.pMin[i] + bounds.pMax[i]) / 2;
+        if (point[i] > axisHalf) nodeIdx = nodeIdx | (int)pow(2,i);
+    }
+
+    if (isInnerNode(nodes[offset])) { // inner node
+        int child_offset = (nodes[offset] >> 1) + nodeIdx;
+        if (RecurseIntersection(ray, isect, octreeDivide(bounds, nodeIdx), point, child_offset)) return true; // necessary?
+
+    } else { // leaf node
+        bool intersectedPrimitive = false;
+        for (uint32_t i = 0; i < sizes[offset]; i++) {
+            int leaf_offset = nodes[offset] >> 1;
+            if (leaves[leaf_offset + i].get()->Intersect(ray, isect)) intersectedPrimitive = true;
+        }
+        if (intersectedPrimitive) return true;
+    }
+
+    // if no intersection has been found, call the recursive function with the 'next' cube of bounds (neighouring nodeIdx)
+    Point3f next_point;
+    Float length;
+    int flipAxis;
+    
+    // Check intersection with outer planes of WorldBound
+    for (int axis = 0; axis < 3; axis++) { // X=0; Y=1; Z=2
+
+        // Determine factor for formula: point = origin + factor * direction
+        Float factor = (bounds.pMin[axis] + bounds.pMax[axis]) / 2;
+        factor = (factor - point[axis]) / ray.d[axis];
+
+        Point3f pnt_tmp = point + factor * ray.d; // The newly found point of intersection
+
+        // Check if its within the World Bound box
+        int otherAxis1 = (axis + 1) % 2;
+        int otherAxis2 = (axis + 2) % 2;
+        if (pnt_tmp[otherAxis1] > bounds.pMax[otherAxis1] ||
+            pnt_tmp[otherAxis2] > bounds.pMax[otherAxis2] ||
+            pnt_tmp[otherAxis1] < bounds.pMin[otherAxis1] ||
+            pnt_tmp[otherAxis2] < bounds.pMin[otherAxis2]) {
+                continue; 
+        }
+
+        // If its closer than any previously determined point then make this the saved point of intersection
+        if (length == 0 || factor * ray.d.Length() < length) {
+            next_point = point + factor * ray.d;
+            length = factor * ray.d.Length();
+            flipAxis = axis;
+        }
+    }
+
+    if (length == 0) return false;
+
+    int next_node_idx = nodeIdx | flipAxis;
+    int next_offset = offset - nodeIdx + next_node_idx;
+
+    return RecurseIntersection(ray, isect, bounds, next_point, next_offset);
 }
 
 bool OctreeAccel::IntersectP(const Ray &ray) const {
     ProfilePhase p(Prof::AccelIntersectP);
-    // Compute initial parametric range of ray inside kd-tree extent
-
-    // Prepare to traverse kd-tree for ray
-    return false;
+    SurfaceInteraction *isect;
+    return Intersect(ray, isect);
 }
 
 std::shared_ptr<OctreeAccel> CreateOctreeAccelerator(std::vector<std::shared_ptr<Primitive>> prims, const ParamSet &ps) {
     return std::make_shared<OctreeAccel>(std::move(prims));
+}
+
+bool isInnerNode(int node) {
+    return node & 1 == 0;
+}
+
+
+// === VISUALIZATION ===
+// Code to visualize octree
+void OctreeAccel::lh_dump_rec(FILE *f, uint *vcnt_, int offset, Bounds3f bounds) {
+
+    // Vertices ausgeben
+    for(uint i = 0; i < 8; i++)
+    {
+        Float x = ((i & 1) == 0) ? bounds.pMin.x : bounds.pMax.x;
+        Float y = ((i & 2) == 0) ? bounds.pMin.y : bounds.pMax.y;
+        Float z = ((i & 4) == 0) ? bounds.pMin.z : bounds.pMax.z;
+        fprintf(f, "v %f %f %f\n", x, y, z);
+    }
+
+    // Vertex indices ausgeben
+    uint vcnt = *vcnt_;
+    fprintf(f, "f %d %d %d %d\n", vcnt    , vcnt + 1, vcnt + 5, vcnt + 4);//bottom
+    fprintf(f, "f %d %d %d %d\n", vcnt + 2, vcnt + 3, vcnt + 7, vcnt + 6);//top
+    fprintf(f, "f %d %d %d %d\n", vcnt    , vcnt + 1, vcnt + 3, vcnt + 2);//front
+    fprintf(f, "f %d %d %d %d\n", vcnt + 4, vcnt + 5, vcnt + 7, vcnt + 6);//back
+    fprintf(f, "f %d %d %d %d\n", vcnt    , vcnt + 4, vcnt + 6, vcnt + 2);//left
+    fprintf(f, "f %d %d %d %d\n", vcnt + 1, vcnt + 5, vcnt + 7, vcnt + 3);//right
+    *vcnt_ += 8;
+
+    // Rekursion
+    if ((nodes[offset] & 1) == 0) { // Inner node
+        for (uint32_t i = 0; i < 8; i++) {
+            lh_dump_rec(f, vcnt_, (nodes[offset] >> 1) + i, octreeDivide(bounds, i));
+        }
+    }
+}
+
+void OctreeAccel::lh_dump(const char *path) {
+    FILE *f = fopen(path, "wb");
+    uint vcnt = 1;
+    lh_dump_rec(f, &vcnt, 0, WorldBound());
+    fclose(f);
 }
 
 }  // namespace pbrt

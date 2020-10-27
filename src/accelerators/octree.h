@@ -65,6 +65,7 @@ class OctreeAccel : public Aggregate {
     void Recurse(int offset, std::vector<std::shared_ptr<Primitive>> primitives, Bounds3f bounds, int depth);
     void lh_dump_rec(FILE *f, uint *vcnt_, int offset, Bounds3f bounds);
     void lh_dump(const char *path);
+    bool RecurseIntersection(const Ray &ray, SurfaceInteraction *isect, Bounds3f bounds, Point3f point, int offset);
 
     std::vector<uint32_t> nodes, sizes; 
     std::vector<std::shared_ptr<Primitive>> leaves;

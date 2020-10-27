@@ -1,0 +1,44 @@
+
+LookAt 400 20 30   0 63 -110   0 0 1
+Rotate -5 0 0 1
+Camera "perspective" "float fov" [39]
+Film "image"  
+"integer xresolution" [700] "integer yresolution" [700]
+    "string filename" "simple-test.exr"
+
+# zoom in by feet
+# "integer xresolution" [1500] "integer yresolution" [1500]
+#	"float cropwindow" [ .34 .49  .67 .8 ]
+
+Sampler "halton" "integer pixelsamples" [8]
+Accelerator "octree"
+
+Integrator "path"
+
+WorldBegin
+
+AttributeBegin
+Material "matte" "color Kd" [1 0 0]
+Translate 150 0  20
+Translate 0 120 0
+AreaLightSource "area"  "color L" [2000 2000 2000] "integer nsamples" [8]
+Shape "sphere" "float radius" [3]
+AttributeEnd
+
+AttributeBegin
+Material "matte" "color Kd" [0 1 0]
+Translate -100 -80  -40
+Translate 0 120 0
+AreaLightSource "area"  "color L" [2000 2000 2000] "integer nsamples" [8]
+Shape "sphere" "float radius" [3]
+AttributeEnd
+
+AttributeBegin
+Material "matte" "color Kd" [0 0 1]
+Translate -150 20  0
+Translate 0 120 0
+AreaLightSource "area"  "color L" [2000 2000 2000] "integer nsamples" [8]
+Shape "sphere" "float radius" [3]
+AttributeEnd
+
+WorldEnd
