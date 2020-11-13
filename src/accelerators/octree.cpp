@@ -47,13 +47,36 @@ bool isOverlapping(Float min1, Float max1, Float min2, Float max2) {
     return max1 >= min2 && max2 >= min1;
 }
 
-Bounds3f OctreeAccel::octreeDivide(Bounds3f b, int idx) {
+Bounds3f OctreeAccel::octreeDivide(Bounds3f b, int idx) const {
     for (int i = 0; i < 3; i++) {
         Float axisHalf = (b.pMin[i] + b.pMax[i]) / 2;
         if ((idx & (int)pow(2,i)) == 0) b.pMax[i] = axisHalf;
         else b.pMin[i] = axisHalf;
     }
     return b;
+}
+
+bool IsPointWithinBounds(Bounds3f b, Point3f p) {
+    for (int i = 0; i < 3; i++) if (p[i] < b.pMin[i] || p[i] > b.pMax[i]) return false;
+    return true;
+}
+
+int DetermineNodeIdx(Bounds3f b, Point3f p) {
+    int node_idx = 0;
+    for (int i = 0; i < 3; i++) {
+        Float axisHalf = (b.pMin[i] + b.pMax[i]) / 2;
+        if (p[i] > axisHalf) node_idx = node_idx | (int)pow(2,i);
+    }
+    return node_idx;
+}
+
+bool OctreeAccel::IntersectLeafPrims(const Ray &ray, SurfaceInteraction *isect, Bounds3f bounds, uint32_t offset) const{
+    bool intersectedPrimitive = false;
+    for (uint32_t i = 0; i < sizes[offset]; i++) {
+        int leaf_offset = nodes[offset] >> 1;
+        if (leaves[leaf_offset + i].get()->Intersect(ray, isect)) intersectedPrimitive = true;
+    }
+    return intersectedPrimitive && IsPointWithinBounds(bounds, isect->p);
 }
 
 void OctreeAccel::Recurse(int offset, std::vector<std::shared_ptr<Primitive>> primitives, Bounds3f bounds, int depth) {        
@@ -141,109 +164,119 @@ OctreeAccel::~OctreeAccel() { //FreeAligned(nodes2);
 bool OctreeAccel::Intersect(const Ray &ray, SurfaceInteraction *isect) const {
     ProfilePhase p(Prof::AccelIntersect);
 
-    Point3f pnt;
-    Float length;
-    
-    // Check intersection with outer planes of WorldBound
-    for (int i = 0; i < 6; i++) { // X=0,1; Y=2,3; Z=4,5; Even=Min; Odd=max
-        int axis = i / 2; //axis: 0=x; 1=y; 2=z
-        bool min = i % 2 == 0; //min: true=min; false=max
+    Point3f point = ray.o;
 
-        if (ray.d[axis] == 0) continue;
+    if (!IsPointWithinBounds(wb, ray.o)) {
+        // Check intersection with outer planes of WorldBound and find closest point
+        Float factor = ray.tMax;
+        for (int i = 0; i < 6; i++) { // X=0,1; Y=2,3; Z=4,5; Even=Min; Odd=max
+            int axis = i / 2; bool min = i % 2 == 0;
 
-        // Determine factor for formula: point = origin + factor * direction
-        Float factor = (min) ? wb.pMin[axis] : wb.pMax[axis];
-        factor = (factor - ray.o[axis]) / ray.d[axis];
+            if (ray.d[axis] == 0) continue; 
 
-        if (factor < 0) continue; // Intersection is behind ray
+            // Determine factor for formula: point = origin + factor * direction; Then check if factor is legal
+            Float f = (((min) ? wb.pMin[axis] : wb.pMax[axis]) - ray.o[axis]) / ray.d[axis];
+            if (f < 0 || f >= ray.tMax) continue; // Intersection is outside of tMin and tMax
+            if (!IsPointWithinBounds(wb, ray.o + f * ray.d)) continue;
 
-        Point3f pnt_tmp = ray.o + factor * ray.d; // The newly found point of intersection
-
-        // Check if its within the World Bound box
-        int otherAxis1 = (axis + 1) % 2;
-        int otherAxis2 = (axis + 2) % 2;
-        if (pnt_tmp[otherAxis1] > wb.pMax[otherAxis1] ||
-            pnt_tmp[otherAxis2] > wb.pMax[otherAxis2] ||
-            pnt_tmp[otherAxis1] < wb.pMin[otherAxis1] ||
-            pnt_tmp[otherAxis2] < wb.pMin[otherAxis2]) {
-                continue; 
+            // If it's closer than any previously determined point then make this the saved factor
+            if (f < factor) factor = f;
         }
 
-        // If its closer than any previously determined point then make this the saved point of intersection
-        if (length == 0 || factor * ray.d.Length() < length) {
-            pnt = ray.o + factor * ray.d;
-            length = factor * ray.d.Length();
-        }
+        if (factor >= ray.tMax) return false;
+
+        Point3f point  = ray.o + factor * ray.d;
     }
 
-    if (length == 0) return false;
+    return RecurseIntersection(ray, isect, wb, 0, point);
+}
 
-    //return RecurseIntersection(ray, isect, wb, pnt, 0);
+struct node_isect { int flip_mask; Float factor; };
 
-    return false;
+bool CloserNode(node_isect n1, node_isect n2) {
+    return n1.factor < n2.factor;
+}
+
+// Returns a sorted list of all cut half-axis
+std::vector<node_isect> FindNodeTraverseOrder(const Ray &ray, Bounds3f bounds) {
+    std::vector<node_isect> node_order = {node_isect{0, 0}}; // "base" node
+    for (int axis = 0; axis < 3; axis++) { 
+        if (ray.d[axis] == 0) continue;
+
+        node_isect node = {(int)pow(2,axis), ((bounds.pMin[axis] + bounds.pMax[axis]) / 2 - ray.o[axis]) / ray.d[axis]};
+
+        if (node.factor < 0 || node.factor > ray.tMax) continue;
+        if (!IsPointWithinBounds(bounds, ray.o + node.factor * ray.d)) continue;
+
+        node_order.push_back(node);
+    }
+    std::sort(node_order.begin(), node_order.end(), CloserNode);
+    return node_order;
 }
 
 bool OctreeAccel::RecurseIntersection(const Ray &ray, SurfaceInteraction *isect,
-        Bounds3f bounds, Point3f point, int offset) {
-
-    // Figure out which child (index) the point is touching
-    int nodeIdx;
-    for (int i = 0; i < 3; i++) {
-        Float axisHalf = (bounds.pMin[i] + bounds.pMax[i]) / 2;
-        if (point[i] > axisHalf) nodeIdx = nodeIdx | (int)pow(2,i);
+        Bounds3f bounds, uint32_t offset, Point3f point) const {
+    if ((nodes[offset] & 1) == 0) {
+        std::vector<node_isect> node_traverse_order = FindNodeTraverseOrder(ray, bounds);
+        int child_node_idx = DetermineNodeIdx(bounds, point);
+        for (int i = 0; i < node_traverse_order.size(); i++) {
+            child_node_idx |= node_traverse_order[i].flip_mask;
+            Bounds3f child_bounds = octreeDivide(bounds, child_node_idx);
+            uint32_t child_offset = (nodes[offset] >> 1) + child_node_idx;
+            Point3f child_point = ray.o + node_traverse_order[i].factor * ray.d;
+            if (RecurseIntersection(ray, isect, child_bounds, child_offset, child_point)) return true;
+        }
+    } else if (IntersectLeafPrims(ray, isect, bounds, offset)) {
+        return true;
     }
 
-    if (isInnerNode(nodes[offset])) { // inner node
-        int child_offset = (nodes[offset] >> 1) + nodeIdx;
-        if (RecurseIntersection(ray, isect, octreeDivide(bounds, nodeIdx), point, child_offset)) return true; // necessary?
-
-    } else { // leaf node
-        bool intersectedPrimitive = false;
-        for (uint32_t i = 0; i < sizes[offset]; i++) {
-            int leaf_offset = nodes[offset] >> 1;
-            if (leaves[leaf_offset + i].get()->Intersect(ray, isect)) intersectedPrimitive = true;
-        }
-        if (intersectedPrimitive) return true;
-    }
-
-    // if no intersection has been found, call the recursive function with the 'next' cube of bounds (neighouring nodeIdx)
-    Point3f next_point;
-    Float length;
-    int flipAxis;
-    
-    // Check intersection with outer planes of WorldBound
-    for (int axis = 0; axis < 3; axis++) { // X=0; Y=1; Z=2
-
-        // Determine factor for formula: point = origin + factor * direction
-        Float factor = (bounds.pMin[axis] + bounds.pMax[axis]) / 2;
-        factor = (factor - point[axis]) / ray.d[axis];
-
-        Point3f pnt_tmp = point + factor * ray.d; // The newly found point of intersection
-
-        // Check if its within the World Bound box
-        int otherAxis1 = (axis + 1) % 2;
-        int otherAxis2 = (axis + 2) % 2;
-        if (pnt_tmp[otherAxis1] > bounds.pMax[otherAxis1] ||
-            pnt_tmp[otherAxis2] > bounds.pMax[otherAxis2] ||
-            pnt_tmp[otherAxis1] < bounds.pMin[otherAxis1] ||
-            pnt_tmp[otherAxis2] < bounds.pMin[otherAxis2]) {
-                continue; 
-        }
-
-        // If its closer than any previously determined point then make this the saved point of intersection
-        if (length == 0 || factor * ray.d.Length() < length) {
-            next_point = point + factor * ray.d;
-            length = factor * ray.d.Length();
-            flipAxis = axis;
-        }
-    }
-
-    if (length == 0) return false;
-
-    int next_node_idx = nodeIdx | flipAxis;
-    int next_offset = offset - nodeIdx + next_node_idx;
-
-    return RecurseIntersection(ray, isect, bounds, next_point, next_offset);
+    return false;
+    //int node_idx = (offset - 1) % 8;
+    //Bounds3f node_bounds = octreeDivide(bounds, node_idx);
+    //
+    //if ((nodes[offset] & 1) == 0) {// inner node
+    //    uint32_t child_offset = (nodes[offset] >> 1) + DetermineNodeIdx(node_bounds, point);
+    //    if (RecurseIntersection(ray, isect, node_bounds, child_offset, point)) return true;
+    //} else if (IntersectLeafPrims(ray, isect, node_bounds, offset)) return true;
+    //
+    //
+    //// === TRAVERSE NEIGHBOURING NODES ===
+    //struct node_isect { int flip_axis; Float factor; };
+    //std::vector<node_isect> node_order; // holds order of indices of neighbouring nodes
+    //for (int axis = 0; axis < 3; axis++) { // Find order of neighbouring nodes
+    //    if (ray.d[axis] == 0) continue;
+    //
+    //    node_isect node;
+    //
+    //    // Point = Origin + factor * Direction
+    //    node.factor = ((bounds.pMin[axis] + bounds.pMax[axis]) / 2 - ray.o[axis]) / ray.d[axis];
+    //    if (node.factor < 0 || node.factor > ray.tMax) continue;
+    //    if (!IsPointWithinBounds(node_bounds, ray.o + node.factor * ray.d)) continue;
+    //    node.flip_axis = axis;
+    //
+    //    if (node_order.size() == 0) { node_order.push_back(node); continue; }
+    //
+    //    // Insert found point in the correct place into the 2 vectors
+    //    for (int i = 0; i < node_order.size(); i++) {
+    //        if (node.factor >= node_order[i].factor) continue;
+    //
+    //        // Insert node into index i
+    //        node_order.push_back(node); // Placeholder
+    //        for (int j = node_order.size() - 1; j > i; j--) node_order[j] = node_order[j-1];
+    //        node_order[i] = node;
+    //        break;
+    //    }
+    //}
+    //
+    //int next_node_idx = node_idx;
+    //for (int i = 0; i < node_order.size(); i++) {
+    //    next_node_idx = next_node_idx | (int)pow(2,node_order[i].flip_axis);
+    //    uint32_t next_offset = offset - node_idx + next_node_idx;
+    //    if (RecurseIntersection(ray, isect, bounds, next_offset, ray.o + node_order[i].factor * ray.d)) return true;
+    //}
+    //// === TRAVERSE NEIGHBOURING NODES END ===
+    //
+    //return false;
 }
 
 bool OctreeAccel::IntersectP(const Ray &ray) const {
@@ -254,10 +287,6 @@ bool OctreeAccel::IntersectP(const Ray &ray) const {
 
 std::shared_ptr<OctreeAccel> CreateOctreeAccelerator(std::vector<std::shared_ptr<Primitive>> prims, const ParamSet &ps) {
     return std::make_shared<OctreeAccel>(std::move(prims));
-}
-
-bool isInnerNode(int node) {
-    return node & 1 == 0;
 }
 
 
