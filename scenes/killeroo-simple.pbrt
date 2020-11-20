@@ -17,6 +17,13 @@ Integrator "path"
 
 WorldBegin
 
+## uniform blue-ish illumination from all directions
+#LightSource "infinite" "rgb L" [.4 .45 .5]
+#
+## approximate the sun
+#LightSource "distant"  "point from" [ -30 40  100 ]
+#   "blackbody L" [3000 1.5]
+
 AttributeBegin
 Material "matte" "color Kd" [0 0 0]
 Translate 150 0  20
@@ -24,6 +31,190 @@ Translate 0 120 0
 AreaLightSource "area"  "color L" [2000 2000 2000] "integer nsamples" [8]
 Shape "sphere" "float radius" [3]
 AttributeEnd
+
+
+##===
+#AttributeBegin
+#Material "glass" "color Kd" [1 1 1]
+#Translate 100 115 -140
+##AreaLightSource "area"  "color L" [2000 2000 2000] "integer nsamples" [8]
+#Shape "sphere" "float radius" [3]
+#AttributeEnd
+#AttributeBegin
+#Material "glass" "color Kd" [1 1 1]
+#Translate 100 115 -140
+##AreaLightSource "area"  "color L" [2000 2000 2000] "integer nsamples" [8]
+#Shape "sphere" "float radius" [3]
+#AttributeEnd
+#AttributeBegin
+#Material "glass" "color Kd" [1 1 1]
+#Translate 100 115 -140
+##AreaLightSource "area"  "color L" [2000 2000 2000] "integer nsamples" [8]
+#Shape "sphere" "float radius" [3]
+#AttributeEnd
+#AttributeBegin
+#Material "glass" "color Kd" [1 1 1]
+#Translate 100 115 -140
+##AreaLightSource "area"  "color L" [2000 2000 2000] "integer nsamples" [8]
+#Shape "sphere" "float radius" [3]
+#AttributeEnd
+#AttributeBegin
+#Material "glass" "color Kd" [1 1 1]
+#Translate 100 115 -140
+##AreaLightSource "area"  "color L" [2000 2000 2000] "integer nsamples" [8]
+#Shape "sphere" "float radius" [3]
+#AttributeEnd
+#AttributeBegin
+#Material "glass" "color Kd" [1 1 1]
+#Translate 100 115 -140
+##AreaLightSource "area"  "color L" [2000 2000 2000] "integer nsamples" [8]
+#Shape "sphere" "float radius" [3]
+#AttributeEnd
+#AttributeBegin
+#Material "glass" "color Kd" [1 1 1]
+#Translate 100 115 -140
+##AreaLightSource "area"  "color L" [2000 2000 2000] "integer nsamples" [8]
+#Shape "sphere" "float radius" [3]
+#AttributeEnd
+#AttributeBegin
+#Material "glass" "color Kd" [1 1 1]
+#Translate 100 115 -140
+##AreaLightSource "area"  "color L" [2000 2000 2000] "integer nsamples" [8]
+#Shape "sphere" "float radius" [3]
+#AttributeEnd
+#AttributeBegin
+#Material "glass" "color Kd" [1 1 1]
+#Translate 100 115 -140
+##AreaLightSource "area"  "color L" [2000 2000 2000] "integer nsamples" [8]
+#Shape "sphere" "float radius" [3]
+#AttributeEnd
+#AttributeBegin
+#Material "glass" "color Kd" [1 1 1]
+#Translate 100 115 -140
+##AreaLightSource "area"  "color L" [2000 2000 2000] "integer nsamples" [8]
+#Shape "sphere" "float radius" [3]
+#AttributeEnd
+#AttributeBegin
+#Material "glass" "color Kd" [1 1 1]
+#Translate 100 115 -140
+##AreaLightSource "area"  "color L" [2000 2000 2000] "integer nsamples" [8]
+#Shape "sphere" "float radius" [3]
+#AttributeEnd
+#AttributeBegin
+#Material "glass" "color Kd" [1 1 1]
+#Translate 100 115 -140
+##AreaLightSource "area"  "color L" [2000 2000 2000] "integer nsamples" [8]
+#Shape "sphere" "float radius" [3]
+#AttributeEnd
+#AttributeBegin
+#Material "glass" "color Kd" [1 1 1]
+#Translate 100 115 -140
+##AreaLightSource "area"  "color L" [2000 2000 2000] "integer nsamples" [8]
+#Shape "sphere" "float radius" [3]
+#AttributeEnd
+#AttributeBegin
+#Material "glass" "color Kd" [1 1 1]
+#Translate 100 115 -140
+##AreaLightSource "area"  "color L" [2000 2000 2000] "integer nsamples" [8]
+#Shape "sphere" "float radius" [3]
+#AttributeEnd
+#AttributeBegin
+#Material "glass" "color Kd" [1 1 1]
+#Translate 100 115 -140
+##AreaLightSource "area"  "color L" [2000 2000 2000] "integer nsamples" [8]
+#Shape "sphere" "float radius" [3]
+#AttributeEnd
+#AttributeBegin
+#Material "glass" "color Kd" [1 1 1]
+#Translate 100 115 -140
+##AreaLightSource "area"  "color L" [2000 2000 2000] "integer nsamples" [8]
+#Shape "sphere" "float radius" [3]
+#AttributeEnd
+#AttributeBegin
+#Material "glass" "color Kd" [1 1 1]
+#Translate 100 115 -140
+##AreaLightSource "area"  "color L" [2000 2000 2000] "integer nsamples" [8]
+#Shape "sphere" "float radius" [3]
+#AttributeEnd
+#AttributeBegin
+#Material "glass" "color Kd" [1 1 1]
+#Translate 100 115 -140
+##AreaLightSource "area"  "color L" [2000 2000 2000] "integer nsamples" [8]
+#Shape "sphere" "float radius" [3]
+#AttributeEnd
+#AttributeBegin
+#Material "glass" "color Kd" [1 1 1]
+#Translate 100 115 -140
+##AreaLightSource "area"  "color L" [2000 2000 2000] "integer nsamples" [8]
+#Shape "sphere" "float radius" [3]
+#AttributeEnd
+#AttributeBegin
+#Material "glass" "color Kd" [1 1 1]
+#Translate 100 115 -140
+##AreaLightSource "area"  "color L" [2000 2000 2000] "integer nsamples" [8]
+#Shape "sphere" "float radius" [3]
+#AttributeEnd
+#AttributeBegin
+#Material "glass" "color Kd" [1 1 1]
+#Translate 100 115 -140
+##AreaLightSource "area"  "color L" [2000 2000 2000] "integer nsamples" [8]
+#Shape "sphere" "float radius" [3]
+#AttributeEnd
+#AttributeBegin
+#Material "glass" "color Kd" [1 1 1]
+#Translate 100 115 -140
+##AreaLightSource "area"  "color L" [2000 2000 2000] "integer nsamples" [8]
+#Shape "sphere" "float radius" [3]
+#AttributeEnd
+#AttributeBegin
+#Material "glass" "color Kd" [1 1 1]
+#Translate 100 115 -140
+##AreaLightSource "area"  "color L" [2000 2000 2000] "integer nsamples" [8]
+#Shape "sphere" "float radius" [3]
+#AttributeEnd
+#AttributeBegin
+#Material "glass" "color Kd" [1 1 1]
+#Translate 100 115 -140
+##AreaLightSource "area"  "color L" [2000 2000 2000] "integer nsamples" [8]
+#Shape "sphere" "float radius" [3]
+#AttributeEnd
+#AttributeBegin
+#Material "glass" "color Kd" [1 1 1]
+#Translate 100 115 -140
+##AreaLightSource "area"  "color L" [2000 2000 2000] "integer nsamples" [8]
+#Shape "sphere" "float radius" [3]
+#AttributeEnd
+#AttributeBegin
+#Material "glass" "color Kd" [1 1 1]
+#Translate 100 115 -140
+##AreaLightSource "area"  "color L" [2000 2000 2000] "integer nsamples" [8]
+#Shape "sphere" "float radius" [3]
+#AttributeEnd
+#AttributeBegin
+#Material "glass" "color Kd" [1 1 1]
+#Translate 100 115 -140
+##AreaLightSource "area"  "color L" [2000 2000 2000] "integer nsamples" [8]
+#Shape "sphere" "float radius" [3]
+#AttributeEnd
+#AttributeBegin
+#Material "glass" "color Kd" [1 1 1]
+#Translate 100 115 -140
+##AreaLightSource "area"  "color L" [2000 2000 2000] "integer nsamples" [8]
+#Shape "sphere" "float radius" [3]
+#AttributeEnd
+#AttributeBegin
+#Material "glass" "color Kd" [1 1 1]
+#Translate 100 115 -140
+##AreaLightSource "area"  "color L" [2000 2000 2000] "integer nsamples" [8]
+#Shape "sphere" "float radius" [3]
+#AttributeEnd
+#AttributeBegin
+#Material "glass" "color Kd" [1 1 1]
+#Translate 100 115 -140
+##AreaLightSource "area"  "color L" [2000 2000 2000] "integer nsamples" [8]
+#Shape "sphere" "float radius" [3]
+#AttributeEnd
+##===
 
 
 AttributeBegin
@@ -48,6 +239,6 @@ Translate 100 200 -140
         "float roughness" [.15] 
 Translate -200 0 0
     Include "geometry/killeroo.pbrt"
-
 AttributeEnd
+
 WorldEnd
