@@ -71,17 +71,7 @@ int DetermineNodeIdx(Bounds3f b, Point3f p) {
     return node_idx;
 }
 
-bool OctreeAccel::IntersectLeafPrims(const Ray &ray, SurfaceInteraction *isect, Bounds3f bounds, uint32_t offset) const{
-    bool hit = false;
-    for (uint32_t i = 0; i < sizes[offset]; i++) {
-        int leaf_offset = nodes[offset] >> 1;
-        if (leaves[leaf_offset + i].get()->Intersect(ray, isect)) hit = true;
-    }
-    return hit && BoundsContainPoint(bounds, isect->p);
-}
-
 struct node_isect { int flip_mask; Float tMin; };
-
 bool CloserNode(node_isect n1, node_isect n2) { return n1.tMin < n2.tMin; }
 
 // Returns a sorted list of all cut half-axis
@@ -97,35 +87,6 @@ std::vector<node_isect> FindChildrenTraverseOrder(const Ray &ray, Bounds3f bound
     }
     std::sort(node_order.begin(), node_order.end(), CloserNode);
     return node_order;
-}
-
-void OctreeAccel::Recurse(int offset, std::vector<std::shared_ptr<Primitive>> primitives, Bounds3f bounds, int depth) {        
-
-    std::vector<std::shared_ptr<Primitive>> prims;
-    for (int i = 0; i < primitives.size(); i++) {
-        std::shared_ptr<Primitive> p = primitives.at(i);
-        Bounds3f primBounds = p->WorldBound();
-        if (BoundsOverlap(primBounds, bounds)) prims.push_back(p);
-    }
-
-    if (prims.size() > MAX_PRIMS && depth < MAX_DEPTH) { // Inner node
-        uint32_t offset_children = nodes.size();
-
-        std::vector<uint32_t> nodes_children = {0, 0, 0, 0, 0, 0, 0, 0};
-        std::vector<uint32_t> sizes_children = {0, 0, 0, 0, 0, 0, 0, 0};
-        nodes.insert(nodes.end(), nodes_children.begin(), nodes_children.end());
-        sizes.insert(sizes.end(), sizes_children.begin(), sizes_children.end());
-
-        nodes[offset] = offset_children << 1 | 0;
-        for (uint32_t i = 0; i < 8; i++) Recurse(offset_children + i, prims, octreeDivide(bounds, i), depth + 1);
-    } else { // Leaf node
-        uint32_t offset_leaves = leaves.size();
-
-        leaves.insert(leaves.end(), prims.begin(), prims.end());
-
-        nodes[offset] = offset_leaves << 1 | 1;
-        sizes[offset] = prims.size();
-    }
 }
 
 // KdTreeAccel Method Definitions
@@ -185,16 +146,41 @@ OctreeAccel::OctreeAccel(std::vector<std::shared_ptr<Primitive>> p) : primitives
     // int x = 3;
 }
 
-OctreeAccel::~OctreeAccel() { //FreeAligned(nodes2);
+void OctreeAccel::Recurse(int offset, std::vector<std::shared_ptr<Primitive>> primitives, Bounds3f bounds, int depth) {        
+
+    std::vector<std::shared_ptr<Primitive>> prims;
+    for (int i = 0; i < primitives.size(); i++) {
+        std::shared_ptr<Primitive> p = primitives.at(i);
+        Bounds3f primBounds = p->WorldBound();
+        if (BoundsOverlap(primBounds, bounds)) prims.push_back(p);
+    }
+
+    if (prims.size() > MAX_PRIMS && depth < MAX_DEPTH) { // Inner node
+        uint32_t offset_children = nodes.size();
+
+        std::vector<uint32_t> nodes_children = {0, 0, 0, 0, 0, 0, 0, 0};
+        std::vector<uint32_t> sizes_children = {0, 0, 0, 0, 0, 0, 0, 0};
+        nodes.insert(nodes.end(), nodes_children.begin(), nodes_children.end());
+        sizes.insert(sizes.end(), sizes_children.begin(), sizes_children.end());
+
+        nodes[offset] = offset_children << 1 | 0;
+        for (uint32_t i = 0; i < 8; i++) Recurse(offset_children + i, prims, octreeDivide(bounds, i), depth + 1);
+    } else { // Leaf node
+        uint32_t offset_leaves = leaves.size();
+
+        leaves.insert(leaves.end(), prims.begin(), prims.end());
+
+        nodes[offset] = offset_leaves << 1 | 1;
+        sizes[offset] = prims.size();
+    }
 }
 
 bool OctreeAccel::Intersect(const Ray &ray, SurfaceInteraction *isect) const {
     ProfilePhase p(Prof::AccelIntersect);
-
+    bool hit = false;
     Float tMin;
     if (!wb.IntersectP(ray, &tMin, &(ray.tMax))) return false;
-    if (tMin < 0) tMin = 0;
-    return RecurseIntersect(ray, isect, wb, 0, tMin);
+    return RecurseIntersect(ray, isect, wb, 0, tMin, hit);
 
     //Point3f point = ray.o;
 //
@@ -222,31 +208,37 @@ bool OctreeAccel::Intersect(const Ray &ray, SurfaceInteraction *isect) const {
 }
 
 bool OctreeAccel::RecurseIntersect(const Ray &ray, SurfaceInteraction *isect,
-        Bounds3f bounds, uint32_t offset, Float tMin) const {
+        Bounds3f bounds, uint32_t offset, Float tMin, bool &hit) const {
     if ((nodes[offset] & 1) == 0) { // Inner node
         std::vector<node_isect> children = FindChildrenTraverseOrder(ray, bounds);
         int child_node_idx = DetermineNodeIdx(bounds, ray.o + tMin * ray.d);
         for (int i = 0; i < children.size(); i++) {
             child_node_idx ^= children[i].flip_mask;
-            if (RecurseIntersect(ray, isect,
-                    octreeDivide(bounds, child_node_idx),
-                    (nodes[offset] >> 1) + child_node_idx,
-                    children[i].tMin))
-                return true;
+            Bounds3f child_bounds = octreeDivide(bounds, child_node_idx);
+            uint32_t child_offset = (nodes[offset] >> 1) + child_node_idx;
+            if (RecurseIntersect(ray, isect, child_bounds, child_offset, children[i].tMin, hit)) return true;
         }
     } else {
-        //ray_leaves.push_back(bounds); //vis
-        if (IntersectLeafPrims(ray, isect, bounds, offset)) { // Leaf node
-            //if (idx++ < 10) visualizeRayTraversal(idx, ray_leaves); //vis
-            //for (int i = 0; i < ray_leaves.size(); i++) ray_leaves.pop_back(); //vis
+        ray_leaves.push_back(bounds); //vis
+        if (IntersectLeafPrims(ray, isect, bounds, offset, hit)) { // Leaf node
+            if (idx++ < 10) visualizeRayTraversal(idx, ray_leaves); //vis
+            ray_leaves.clear(); //vis
             return true;
         } else {
             return false;
         }
     }
 
-    //ray_leaves = std::vector<Bounds3f>(); //vis
+    ray_leaves.clear(); //vis
     return false;
+}
+
+bool OctreeAccel::IntersectLeafPrims(const Ray &ray, SurfaceInteraction *isect, Bounds3f bounds, uint32_t offset, bool &hit) const {
+    for (uint32_t i = 0; i < sizes[offset]; i++) {
+        int leaf_offset = nodes[offset] >> 1;
+        if (leaves[leaf_offset + i].get()->Intersect(ray, isect)) hit = true;
+    }
+    return hit && BoundsContainPoint(bounds, isect->p);
 }
 
 bool OctreeAccel::IntersectP(const Ray &ray) const {
@@ -259,6 +251,8 @@ std::shared_ptr<OctreeAccel> CreateOctreeAccelerator(std::vector<std::shared_ptr
     return std::make_shared<OctreeAccel>(std::move(prims));
 }
 
+OctreeAccel::~OctreeAccel() { //FreeAligned(nodes2);
+}
 
 // === VISUALIZATION ===
 // visualize ray traversal
