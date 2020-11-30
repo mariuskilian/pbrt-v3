@@ -35,8 +35,8 @@
 #pragma once
 #endif
 
-#ifndef PBRT_ACCELERATORS_OCTREEACCEL_H
-#define PBRT_ACCELERATORS_OCTREEACCEL_H
+#ifndef PBRT_ACCELERATORS_OCTREEBASICACCEL_H
+#define PBRT_ACCELERATORS_OCTREEBASICACCEL_H
 
 // accelerators/octree.h*
 #include "pbrt.h"
@@ -46,12 +46,12 @@ namespace pbrt {
 
 // OcteeAccel Declarations
 
-class OctreeAccel : public Aggregate {
+class OctreeBasicAccel : public Aggregate {
   public:
     // KdTreeAccel Public Methods
-    OctreeAccel(std::vector<std::shared_ptr<Primitive>> p);
+    OctreeBasicAccel(std::vector<std::shared_ptr<Primitive>> p);
     Bounds3f WorldBound() const { return wb; }
-    ~OctreeAccel();
+    ~OctreeBasicAccel();
     bool Intersect(const Ray &ray, SurfaceInteraction *isect) const;
     bool IntersectP(const Ray &ray) const;
 
@@ -63,10 +63,15 @@ class OctreeAccel : public Aggregate {
     
     Bounds3f octreeDivide(Bounds3f bounds, int idx) const;
     void Recurse(int offset, std::vector<std::shared_ptr<Primitive>> primitives, Bounds3f bounds, int depth);
+    void lh_dump_rec(FILE *f, uint32_t *vcnt_, int offset, Bounds3f bounds);
+    void lh_dump(const char *path);
     void RecurseIntersect(const Ray &ray, SurfaceInteraction *isect, uint32_t offset, Bounds3f bounds, bool &hit) const;
+
+    std::vector<uint32_t> nodes, sizes; 
+    std::vector<std::shared_ptr<Primitive>> leaves;
 };
 
-std::shared_ptr<OctreeAccel> CreateOctreeAccelerator(
+std::shared_ptr<OctreeBasicAccel> CreateOctreeBasicAccelerator(
     std::vector<std::shared_ptr<Primitive>> prims, const ParamSet &ps);
 
 } // namespace pbrt

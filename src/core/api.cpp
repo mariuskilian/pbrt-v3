@@ -43,6 +43,7 @@
 // API Additional Headers
 #include "accelerators/bvh.h"
 #include "accelerators/kdtreeaccel.h"
+#include "accelerators/octree-basic.h"
 #include "accelerators/octree.h"
 #include "cameras/environment.h"
 #include "cameras/orthographic.h"
@@ -777,6 +778,8 @@ std::shared_ptr<Primitive> MakeAccelerator(
         accel = CreateBVHAccelerator(std::move(prims), paramSet);
     else if (name == "kdtree")
         accel = CreateKdTreeAccelerator(std::move(prims), paramSet);
+    else if (name == "octree-basic")
+        accel = CreateOctreeBasicAccelerator(std::move(prims), paramSet);
     else if (name == "octree")
         accel = CreateOctreeAccelerator(std::move(prims), paramSet);
     else
