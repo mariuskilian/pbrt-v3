@@ -44,6 +44,8 @@
 
 namespace pbrt {
 
+const int chunk_depth = 5;
+
 // OcteeAccel Declarations
 
 class OctreeAccel : public Aggregate {
@@ -60,10 +62,22 @@ class OctreeAccel : public Aggregate {
     // OctreeAccel Private Data
     std::vector<std::shared_ptr<Primitive>> primitives;
     Bounds3f wb; // World Bounds
+    OctreeBasicAccel oba;
+
+    struct chunk {
+      uint32_t child_chunk_offset;
+      uint32_t leaf_offset;
+      std::array<uint8_t, chunk_depth> node_type; // 0 inner node, 1 leaf node
+      std::array<uint8_t, chunk_depth> leaf_type; // 0 primitive leaf, 1 chunk leaf
+    };
+    std::vector<chunk> octree;
     
     Bounds3f octreeDivide(Bounds3f bounds, int idx) const;
-    void Recurse(int offset, std::vector<std::shared_ptr<Primitive>> primitives, Bounds3f bounds, int depth);
+    void Recurse(uint32_t root_node_offset, int chunk_idx);  
     void RecurseIntersect(const Ray &ray, SurfaceInteraction *isect, uint32_t offset, Bounds3f bounds, bool &hit) const;
+    void lh_dump_rec(FILE *f, uint32_t *vcnt_, uint32_t chunk_offset, Bounds3f bounds);
+    void lh_dump(const char *path);
+
 };
 
 std::shared_ptr<OctreeAccel> CreateOctreeAccelerator(
