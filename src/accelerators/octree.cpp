@@ -38,7 +38,12 @@
 #include "stats.h"
 #include <algorithm>
 #include <array>
-#include "popcntintrin.h"
+
+#if defined(_MSC_VER)
+    #include "intrin.h"
+#elif defined(__clang__)
+    #include "popcntintrin.h"
+#endif
 
 namespace pbrt {
 
