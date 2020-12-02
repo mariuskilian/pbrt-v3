@@ -49,6 +49,7 @@ namespace pbrt {
 class OctreeBasicAccel : public Aggregate {
   public:
     // KdTreeAccel Public Methods
+    OctreeBasicAccel();
     OctreeBasicAccel(std::vector<std::shared_ptr<Primitive>> p);
     Bounds3f WorldBound() const { return wb; }
     std::vector<uint32_t> Nodes() { return nodes; }

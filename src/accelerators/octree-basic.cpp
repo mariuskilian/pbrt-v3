@@ -53,6 +53,8 @@ Bounds3f OctreeBasicAccel::octreeDivide(Bounds3f b, int idx) const {
     return b;
 }
 
+OctreeBasicAccel::OctreeBasicAccel(){}
+
 // KdTreeAccel Method Definitions
 OctreeBasicAccel::OctreeBasicAccel(std::vector<std::shared_ptr<Primitive>> p) : primitives(std::move(p)) {
     // Hier hast du die Bounding Box falsch initialisiert. Sonst ist immer der Ursprung enthalten.

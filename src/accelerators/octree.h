@@ -41,6 +41,8 @@
 // accelerators/octree.h*
 #include "pbrt.h"
 #include "primitive.h"
+#include "octree-basic.h"
+#include <array>
 
 namespace pbrt {
 

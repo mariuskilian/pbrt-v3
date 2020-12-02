@@ -63,11 +63,11 @@ Bounds3f OctreeAccel::octreeDivide(Bounds3f b, int idx) const {
 
 // KdTreeAccel Method Definitions
 OctreeAccel::OctreeAccel(std::vector<std::shared_ptr<Primitive>> p) : primitives(std::move(p)) {
-    oba = OctreeBasicAccel(primitives);
     wb = oba.WorldBound();
     
     if (oba.Nodes().size() > 1) {
-        octree.push_back({});
+        chunk c_tmp;
+        octree.push_back(c_tmp);
         Recurse(0, 0);
     }
 }
@@ -78,6 +78,7 @@ void OctreeAccel::RecurseIntersect(const Ray &ray, SurfaceInteraction *isect, ui
 
 bool OctreeAccel::Intersect(const Ray &ray, SurfaceInteraction *isect) const {
     ProfilePhase p(Prof::AccelIntersect);
+    return false;
 }
 
 void OctreeAccel::Recurse(uint32_t root_node_offset, int chunk_idx) { 
@@ -102,12 +103,13 @@ void OctreeAccel::Recurse(uint32_t root_node_offset, int chunk_idx) {
         is_leaf_node = false;
         is_inner_leaf = false;
 
-        if (oba.Nodes()[node_offset] & 1 == 0) {
+        if ((oba.Nodes()[node_offset] & 1) == 0) {
             // Inner node
             if (chunk_fill_size == chunk_depth) {
                 // Chunk is full, need to make new chunk
                 inner_leaf_nodes.push_back(node_offset);
-                octree.push_back({}); // reserve chunk slot
+                chunk c_tmp;
+                octree.push_back(c_tmp); // reserve chunk slot
                 is_leaf_node = is_inner_leaf = true;
             } else {
                 // Chunk has space for children
