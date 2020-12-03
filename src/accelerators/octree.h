@@ -70,7 +70,6 @@ class OctreeAccel : public Aggregate {
       uint32_t child_chunk_offset;
       uint32_t leaf_offset;
       std::array<uint8_t, chunk_depth> node_type; // 0 inner node, 1 leaf node
-      std::array<uint8_t, chunk_depth> leaf_type; // 0 primitive leaf, 1 chunk leaf
     };
     std::vector<chunk> octree;
     

@@ -66,10 +66,11 @@ OctreeAccel::OctreeAccel(std::vector<std::shared_ptr<Primitive>> p) : primitives
     wb = oba.WorldBound();
     
     if (oba.Nodes().size() > 1) {
-        chunk c_tmp;
-        octree.push_back(c_tmp);
+        octree.push_back(chunk{});
         Recurse(0, 0);
     }
+
+    lh_dump("visualize.obj");
 }
 
 // TODO Rekursion in Schleife umwandeln (schneller)
@@ -92,44 +93,39 @@ void OctreeAccel::Recurse(uint32_t root_node_offset, int chunk_idx) {
 
     int chunk_fill_size = 1; // number of [set of 8 nodes] reserved in chunk
     int num_nodes = 0; // number of individual nodes already processed
-    std::vector<uint32_t> inner_leaf_nodes; // nodes that point to other chunks
+    std::vector<uint32_t> chunk_ptr_nodes; // nodes that point to other chunks
 
     uint32_t node_offset;
-    bool is_leaf_node;
-    bool is_inner_leaf; // "leaf" pointing to another chunk
+    bool is_inner_node;
 
     while (!bfs_nodes_q.empty()) {
         node_offset = bfs_nodes_q.front();
-        is_leaf_node = false;
-        is_inner_leaf = false;
+        is_inner_node = (oba.Nodes()[node_offset] & 1) == 0;
 
-        if ((oba.Nodes()[node_offset] & 1) == 0) {
+        if (is_inner_node) {
             // Inner node
             if (chunk_fill_size == chunk_depth) {
                 // Chunk is full, need to make new chunk
-                inner_leaf_nodes.push_back(node_offset);
-                chunk c_tmp;
-                octree.push_back(c_tmp); // reserve chunk slot
-                is_leaf_node = is_inner_leaf = true;
+                chunk_ptr_nodes.push_back(node_offset);
+                octree.push_back(chunk{}); // reserve chunk slot
             } else {
                 // Chunk has space for children
                 uint32_t child_offset = oba.Nodes()[node_offset] >> 1;
                 for (int i = 0; i < 8; i++) { bfs_nodes_q.push(child_offset + i); }
                 chunk_fill_size++;
             }
-        } else is_leaf_node = true;
+        }
 
         int arr_idx = num_nodes / 8;
         int bit_pos = num_nodes % 8;
         // When starting a new index, make sure the initial value of the bitcode is 0
-        if (bit_pos == 0) { c.node_type[arr_idx] = 0; c.leaf_type[arr_idx] = 0; }
+        if (bit_pos == 0) c.node_type[arr_idx] = 0;
         // Set the correct bits accordingly
-        if (is_leaf_node) c.node_type[arr_idx] |= (int)pow(2,bit_pos);
-        if (is_inner_leaf) c.leaf_type[arr_idx] |= (int)pow(2,bit_pos);
+        if (!is_inner_node) c.node_type[arr_idx] |= (int)pow(2,bit_pos);
 
         // Create additional chunks as needed
-        for (int i = 0; i < inner_leaf_nodes.size(); i++)
-            Recurse(inner_leaf_nodes[i], c.child_chunk_offset + i);
+        for (int i = 0; i < chunk_ptr_nodes.size(); i++)
+            Recurse(chunk_ptr_nodes[i], c.child_chunk_offset + i);
 
         num_nodes++;
         bfs_nodes_q.pop();
@@ -157,51 +153,48 @@ void OctreeAccel::lh_dump_rec(FILE *f, uint32_t *vcnt_, uint32_t chunk_offset, B
 
     chunk c = octree[chunk_offset];
 
-    std::queue<Bounds3f> bounds_queue;
-    bounds_queue.push(bounds);
-    for (int i = 0; i < 8; i++) {
-        bounds_queue.push(bounds
-        );
-    }
+    std::queue<Bounds3f> bounds_q;
+    bounds_q.push(bounds);
 
-    int num_nodes = 0;
-    while (!bounds_queue.empty()) {
+    int child_chunk_cnt = 0;
 
-    }
-
+    int num_node_sets = 1; // We have at least 1 node 'set' of 8 nodes in the chunk
     for (int idx = 0; idx < c.node_type.size(); idx++) {
-        for (int bit_pos = 0; bit_pos < 8; bit_pos++) {
-
-            if (((c.node_type[idx] >> bit_pos) & 1) == 0) {
-                // Inner node
-
-            } else if (((c.leaf_type[idx] >> bit_pos) & 1) == 0) {
-                // Chunk pointer node
+        if (idx == num_node_sets) break; // This chunk wasn't completely filled
+        for (int bit = 0; bit < 8; bit++) {
+            Bounds3f b = octreeDivide(bounds_q.front(), bit);
+            if (((c.node_type[idx] >> bit) & 1) == 0) {
+                if (num_node_sets < c.node_type.size()) {
+                    // Inner Node
+                    bounds_q.push(b);
+                    num_node_sets++;
+                } else {
+                    // Inner Node pointing to another chunk
+                    lh_dump_rec(f, vcnt_, c.child_chunk_offset + child_chunk_cnt++, b);
+                }
+                // Inner Node
             } else {
-                // Leaf node
+                // Leaf Node
+                // Vertices ausgeben
+                for(uint32_t i = 0; i < 8; i++) {
+                    Float x = ((i & 1) == 0) ? b.pMin.x : b.pMax.x;
+                    Float y = ((i & 2) == 0) ? b.pMin.y : b.pMax.y;
+                    Float z = ((i & 4) == 0) ? b.pMin.z : b.pMax.z;
+                    fprintf(f, "v %f %f %f\n", x, y, z);
+                }
+                // Vertex indices ausgeben
+                uint32_t vcnt = *vcnt_;
+                fprintf(f, "f %d %d %d %d\n", vcnt    , vcnt + 1, vcnt + 5, vcnt + 4);//bottom
+                fprintf(f, "f %d %d %d %d\n", vcnt + 2, vcnt + 3, vcnt + 7, vcnt + 6);//top
+                fprintf(f, "f %d %d %d %d\n", vcnt    , vcnt + 1, vcnt + 3, vcnt + 2);//front
+                fprintf(f, "f %d %d %d %d\n", vcnt + 4, vcnt + 5, vcnt + 7, vcnt + 6);//back
+                fprintf(f, "f %d %d %d %d\n", vcnt    , vcnt + 4, vcnt + 6, vcnt + 2);//left
+                fprintf(f, "f %d %d %d %d\n", vcnt + 1, vcnt + 5, vcnt + 7, vcnt + 3);//right
+                *vcnt_ += 8;
             }
-
         }
+        bounds_q.pop();
     }
-
-    // Vertices ausgeben
-    for(uint32_t i = 0; i < 8; i++)
-    {
-        Float x = ((i & 1) == 0) ? bounds.pMin.x : bounds.pMax.x;
-        Float y = ((i & 2) == 0) ? bounds.pMin.y : bounds.pMax.y;
-        Float z = ((i & 4) == 0) ? bounds.pMin.z : bounds.pMax.z;
-        fprintf(f, "v %f %f %f\n", x, y, z);
-    }
-
-    // Vertex indices ausgeben
-    uint32_t vcnt = *vcnt_;
-    fprintf(f, "f %d %d %d %d\n", vcnt    , vcnt + 1, vcnt + 5, vcnt + 4);//bottom
-    fprintf(f, "f %d %d %d %d\n", vcnt + 2, vcnt + 3, vcnt + 7, vcnt + 6);//top
-    fprintf(f, "f %d %d %d %d\n", vcnt    , vcnt + 1, vcnt + 3, vcnt + 2);//front
-    fprintf(f, "f %d %d %d %d\n", vcnt + 4, vcnt + 5, vcnt + 7, vcnt + 6);//back
-    fprintf(f, "f %d %d %d %d\n", vcnt    , vcnt + 4, vcnt + 6, vcnt + 2);//left
-    fprintf(f, "f %d %d %d %d\n", vcnt + 1, vcnt + 5, vcnt + 7, vcnt + 3);//right
-    *vcnt_ += 8;
 }
 
 void OctreeAccel::lh_dump(const char *path) {

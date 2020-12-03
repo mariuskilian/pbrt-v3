@@ -86,6 +86,7 @@ OctreeBasicAccel::OctreeBasicAccel(std::vector<std::shared_ptr<Primitive>> p) : 
     nodes.push_back(0);
     sizes.push_back(0);
     Recurse(0, primitives, wb, 0);
+    lh_dump("visualize-basic.obj");
 }
 
 struct ChildHit { uint32_t idx; float tMin; };
