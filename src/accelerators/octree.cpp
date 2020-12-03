@@ -63,6 +63,7 @@ Bounds3f OctreeAccel::octreeDivide(Bounds3f b, int idx) const {
 
 // KdTreeAccel Method Definitions
 OctreeAccel::OctreeAccel(std::vector<std::shared_ptr<Primitive>> p) : primitives(std::move(p)) {
+    oba = OctreeBasicAccel(primitives);
     wb = oba.WorldBound();
     
     if (oba.Nodes().size() > 1) {
@@ -73,21 +74,79 @@ OctreeAccel::OctreeAccel(std::vector<std::shared_ptr<Primitive>> p) : primitives
     lh_dump("visualize.obj");
 }
 
+struct InnerNodeHit { int children_offset; Bounds3f bounds; };
+struct ChildHit { int idx; float tMin; };
+
 // TODO Rekursion in Schleife umwandeln (schneller)
-void OctreeAccel::RecurseIntersect(const Ray &ray, SurfaceInteraction *isect, uint32_t offset, Bounds3f bounds, bool &hit) const {
+void OctreeAccel::RecurseIntersect(const Ray &ray, SurfaceInteraction *isect, uint32_t chunk_offset, Bounds3f parent_bounds, bool &hit) const {
+    chunk c = octree[chunk_offset];
+
+    std::deque<InnerNodeHit> traversal_dq; // Only Inner nodes with children in the same chunk will be in this dq
+    traversal_dq.push_back(InnerNodeHit{0, parent_bounds}); // TODO: maybe change init idx and tMin values?
+
+    while (!traversal_dq.empty()) {
+        InnerNodeHit node = traversal_dq.front();
+        traversal_dq.pop_front();
+
+        int traversal_size = 0;
+        std::array<ChildHit, 8> traversal; // It can happen that more than 4 nodes are intersected when using intersectP
+        // 1. Step: Intersect all child bounding boxes and determine t parameter
+        for (int i = 0; i < 8; i++) {
+            Bounds3f child_bounds = octreeDivide(node.bounds, i);
+            ChildHit child_hit = {i};
+            float tMax;
+            // TODO Optimierte Variante implementieren (3 Ebenentests)
+            if (child_bounds.IntersectP(ray, &child_hit.tMin, &tMax)) {
+                //if (traversal_size == 8) abort(); // sanity check
+                traversal[traversal_size++] = child_hit; 
+            }
+            // Invert tMin of real inner nodes, so they're in the inverted order, and pushing them to the front \
+                of traversal_dq later is easier. tMin is otherwise irrelevant for these nodes
+            if (((c.node_type[node.children_offset] >> i) & 1) == 0 && node.children_offset < c.node_type.size())
+                traversal[i].tMin = 1 / ++traversal[i].tMin; // ++ to avoid div by 0
+        }
+        // 2. Step: Sort all children by smallest tMin parameter
+        // TODO eigene sortierung (bei 8 elementen ist ein naives insertionsort whr. besser)
+        std::sort(traversal.begin(), traversal.begin() + traversal_size, [](const ChildHit &a, const ChildHit &b) {return a.tMin < b.tMin;});
+        // 3. Step: Traverse child nodes in order
+        for (int i = 0; i < 8; i++) {
+            // Kindknoten werden dann nicht mehr traversiert, wenn bereits ein näherer Schnitt ermittelt wurde
+            // Dadurch deckt man auch den Fall ab, dass zwar ein Schnitt gefunden wurde, dieser aber außerhalb der Knotens liegt
+            if (i >= traversal_size || traversal[i].tMin > ray.tMax) continue;
+            // Otherwise handle node depending on type: \
+                   - Inner node: insert into front of traversal_dq \
+                   - Inner node pointing to chunk: Call recursion \
+                   - Leaf node: check intersections with primitives
+            if (((c.node_type[node.children_offset] >> i) & 1) == 0) {
+                if (node.children_offset < c.node_type.size()) {
+                    // Inner Node
+                    InnerNodeHit inh = InnerNodeHit{0, octreeDivide(node.bounds, i)}; //TODO: replace 0 with rank(node.children_offset) \
+                                                                                        and try to only do octreeDivide once
+                    traversal_dq.push_front(inh);
+                } else {
+                    // Inner Node pointing to another chunk
+                    
+                }
+            } else {
+                // Leaf Node
+            }
+        }
+    }
 }
 
 bool OctreeAccel::Intersect(const Ray &ray, SurfaceInteraction *isect) const {
     ProfilePhase p(Prof::AccelIntersect);
-    return false;
+    bool hit = false;
+    if (!wb.IntersectP(ray)) return false;
+    RecurseIntersect(ray, isect, 0, wb, hit);
+    return hit;
 }
 
-void OctreeAccel::Recurse(uint32_t root_node_offset, int chunk_idx) { 
-    chunk c = octree[chunk_idx];
-    c.child_chunk_offset = octree.size();
+void OctreeAccel::Recurse(uint32_t root_node_offset, int chunk_idx) {
+    octree[chunk_idx].child_chunk_offset = octree.size();
     // c.leaf_offset = ...
 
-    uint32_t root_child_offset = oba.Nodes()[root_node_offset >> 1];
+    uint32_t root_child_offset = oba.Nodes()[root_node_offset] >> 1;
     std::queue<uint32_t> bfs_nodes_q;
     for (int i = 0; i < 8; i++) { bfs_nodes_q.push(root_child_offset + i); }
 
@@ -102,6 +161,7 @@ void OctreeAccel::Recurse(uint32_t root_node_offset, int chunk_idx) {
         node_offset = bfs_nodes_q.front();
         is_inner_node = (oba.Nodes()[node_offset] & 1) == 0;
 
+        // If it's an inner node, properly reserve its children (new chunk or in current chunk)
         if (is_inner_node) {
             // Inner node
             if (chunk_fill_size == chunk_depth) {
@@ -114,22 +174,22 @@ void OctreeAccel::Recurse(uint32_t root_node_offset, int chunk_idx) {
                 for (int i = 0; i < 8; i++) { bfs_nodes_q.push(child_offset + i); }
                 chunk_fill_size++;
             }
+        } else {
+            // Leaf node
+            int arr_idx = num_nodes / 8;
+            int bit_pos = num_nodes % 8;
+            // When starting a new index, make sure the initial value of the bitcode is 0
+            if (bit_pos == 0) octree[chunk_idx].node_type[arr_idx] = 0;
+            octree[chunk_idx].node_type[arr_idx] |= (int)pow(2,bit_pos);
         }
-
-        int arr_idx = num_nodes / 8;
-        int bit_pos = num_nodes % 8;
-        // When starting a new index, make sure the initial value of the bitcode is 0
-        if (bit_pos == 0) c.node_type[arr_idx] = 0;
-        // Set the correct bits accordingly
-        if (!is_inner_node) c.node_type[arr_idx] |= (int)pow(2,bit_pos);
-
-        // Create additional chunks as needed
-        for (int i = 0; i < chunk_ptr_nodes.size(); i++)
-            Recurse(chunk_ptr_nodes[i], c.child_chunk_offset + i);
 
         num_nodes++;
         bfs_nodes_q.pop();
     } 
+    
+    // Create additional chunks as needed
+    for (int i = 0; i < chunk_ptr_nodes.size(); i++)
+        Recurse(chunk_ptr_nodes[i], octree[chunk_idx].child_chunk_offset + i);
 
 }
 
@@ -150,7 +210,6 @@ OctreeAccel::~OctreeAccel() { //FreeAligned(nodes2);
 
 // Code to visualize octree
 void OctreeAccel::lh_dump_rec(FILE *f, uint32_t *vcnt_, uint32_t chunk_offset, Bounds3f bounds) {
-
     chunk c = octree[chunk_offset];
 
     std::queue<Bounds3f> bounds_q;
