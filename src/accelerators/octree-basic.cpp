@@ -134,8 +134,7 @@ void OctreeBasicAccel::RecurseIntersect(const Ray &ray, SurfaceInteraction *isec
 bool OctreeBasicAccel::Intersect(const Ray &ray, SurfaceInteraction *isect) const {
     ProfilePhase p(Prof::AccelIntersect);
     bool hit = false;
-    Float tMin, tMax;
-    if (!wb.IntersectP(ray, &tMin, &tMax)) return false;
+    if (!wb.IntersectP(ray)) return false;
     RecurseIntersect(ray, isect, 0, wb, hit);
     return hit;
 }
