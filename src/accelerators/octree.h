@@ -46,7 +46,31 @@
 
 namespace pbrt {
 
-const int chunk_depth = 5;
+#if defined(_MSC_VER)
+    #include "intrin.h"
+    #define POPCNT __popcnt64
+#elif defined(__clang__)
+    #include "popcntintrin.h"
+    #define POPCNT _mm_popcnt_u64
+#endif
+
+#define BITFIELD_64 // Change this to change bitfield sizes
+  #if defined BITFIELD_8
+    #define BF_SIZE 8
+    #define BITFIELD_TYPE uint8_t
+  #elif defined BITFIELD_16
+    #define BF_SIZE 16
+    #define BITFIELD_TYPE uint16_t
+  #elif defined BITFIELD_32
+    #define BF_SIZE 32
+    #define BITFIELD_TYPE uint32_t
+  #elif defined BITFIELD_64
+    #define BF_SIZE 64
+    #define BITFIELD_TYPE uint64_t
+  #endif
+const int CHUNK_DEPTH = 5; // Size of chunk array of type BITFIELD_X below
+const int BITFIELD_SIZE = BF_SIZE;
+const int NUM_SETS_PER_BITFIELD = BITFIELD_SIZE / 8;
 
 // OcteeAccel Declarations
 
@@ -69,8 +93,7 @@ class OctreeAccel : public Aggregate {
     struct chunk {
       uint32_t child_chunk_offset;
       uint32_t leaf_offset; // with size
-      // TODO: change uint8_t to uint32_t
-      std::array<uint8_t, chunk_depth> node_type; // 1 inner node, 0 leaf node
+      std::array<BITFIELD_TYPE, CHUNK_DEPTH> node_type; // 1 inner node, 0 leaf node
     };
     std::vector<chunk> octree;
     

@@ -41,12 +41,6 @@
 #include <array>
 #include <queue>
 
-#if defined(_MSC_VER)
-    #include "intrin.h"
-#elif defined(__clang__)
-    #include "popcntintrin.h"
-#endif
-
 namespace pbrt {
 
 const int MAX_DEPTH = 15; //15
@@ -78,36 +72,16 @@ OctreeAccel::OctreeAccel(std::vector<std::shared_ptr<Primitive>> p) : primitives
 struct InnerNodeHit { int children_offset; Bounds3f bounds; };
 struct ChildHit { int idx; float tMin; };
 
-uint64_t bitfieldExtract(uint64_t bitfield, uint64_t count)
-{
-    uint64_t mask = (1 << count) - 1;
-    return bitfield & mask;
-}
-
-int rank(std::array<uint8_t, chunk_depth> nodes, int node_idx) {
-    int set_idx = 0;
-    int rank = 0;
-    while (node_idx > 8) {
-        _mm_popcnt_u32(nodes[(node_idx)/8]);
-        set_idx += 8;
-    }
-    uint8_t mask = (int)pow(2, node_idx-set_idx-8) - 1;
-    return rank + _mm_popcnt_u32(nodes[set_idx+1] & mask);
-}
-
-uint bq_rank(std::array<uint64_t, chunk_depth> &nodes, uint n)
-{
-    uint64_t bits;
-    uint64_t count = 0;
-    for (uint i = 0; i < nodes.size(); i++)
-    {
+int rank(std::array<BITFIELD_TYPE, CHUNK_DEPTH> nodes, int node_idx) {
+    BITFIELD_TYPE bits;
+    BITFIELD_TYPE count = 0;
+    for (int i = 0; i < CHUNK_DEPTH; i++) {
         bits = nodes[i];
-        if (n < 32)
-            break;
-        count += _mm_popcnt_u64(bits);
-        n -= 32;
+        if (node_idx < 64) break;
+        count += POPCNT(bits);
+        node_idx -= 64;
     }
-    return count + _mm_popcnt_u64(bitfieldExtract(bits, int(n)));
+    return count + POPCNT(bits & ((1 << node_idx) - 1));
 }
 
 
@@ -130,7 +104,7 @@ void OctreeAccel::RecurseIntersect(const Ray &ray, SurfaceInteraction *isect, ui
             // Intersect primitives
             // if intersection found hit = true
             continue;
-        } else if (node.children_offset >= c.node_type.size()) {
+        } else if (node.children_offset >= CHUNK_DEPTH * NUM_SETS_PER_BITFIELD) {
             // Chunk Pointer Inner Node
             uint32_t cco = c.child_chunk_offset + node.children_offset - c.node_type.size();
             RecurseIntersect(ray, isect, cco, node.bounds, hit);
@@ -167,7 +141,7 @@ void OctreeAccel::RecurseIntersect(const Ray &ray, SurfaceInteraction *isect, ui
     }
 }
 
-bool isInnerNode(uint8_t node_group, int bit) { return ((node_group >> bit) & 1) == 1; }
+bool isInnerNode(BITFIELD_TYPE node_group, int idx) { return ((node_group >> idx) & 1) == 1; }
 
 bool OctreeAccel::Intersect(const Ray &ray, SurfaceInteraction *isect) const {
     ProfilePhase p(Prof::AccelIntersect);
@@ -196,8 +170,8 @@ void OctreeAccel::Recurse(uint32_t root_node_offset, int chunk_idx) {
         node_offset = bfs_nodes_q.front();
         is_inner_node = (oba.Nodes()[node_offset] & 1) == 0;
             
-        int set_idx = num_nodes / 8;
-        int bit_pos = num_nodes % 8;
+        int set_idx = num_nodes / BITFIELD_SIZE;
+        int bit_pos = num_nodes % BITFIELD_SIZE;
         // When starting a new index, make sure the initial value of the bitcode is 0
         // TODO: koennte man vorher machen
         if (bit_pos == 0) octree[chunk_idx].node_type[set_idx] = 0;
@@ -205,7 +179,7 @@ void OctreeAccel::Recurse(uint32_t root_node_offset, int chunk_idx) {
         // If it's an inner node, properly reserve its children (new chunk or in current chunk)
         if (is_inner_node) {
             // Inner node
-            if (chunk_fill_size == chunk_depth) {
+            if (chunk_fill_size == CHUNK_DEPTH * NUM_SETS_PER_BITFIELD) {
                 // Chunk is full, need to make new chunk
                 chunk_ptr_nodes.push_back(node_offset);
                 octree.push_back(chunk{}); // reserve chunk slot
@@ -253,43 +227,47 @@ void OctreeAccel::lh_dump_rec(FILE *f, uint32_t *vcnt_, uint32_t chunk_offset, B
     bounds_q.push(bounds);
 
     int child_chunk_cnt = 0;
+    int current_set_idx = 0;
 
     int num_node_sets = 1; // We have at least 1 node 'set' of 8 nodes in the chunk
-    for (int idx = 0; idx < c.node_type.size(); idx++) {
-        if (idx == num_node_sets) break; // This chunk wasn't completely filled
-        for (int bit = 0; bit < 8; bit++) {
-            Bounds3f b = octreeDivide(bounds_q.front(), bit);
-            if (((c.node_type[idx] >> bit) & 1) == 1) {
-                if (num_node_sets < c.node_type.size()) {
+    for (int idx = 0; idx < CHUNK_DEPTH; idx++) {
+        for (int set = 0; set < NUM_SETS_PER_BITFIELD; set++) {
+            if (current_set_idx++ == num_node_sets) break; // This chunk wasn't completely filled
+
+            for (int bit = 0; bit < 8; bit++) {
+                Bounds3f b = octreeDivide(bounds_q.front(), bit);
+                if (((c.node_type[idx] >> (set*8 + bit)) & 1) == 1) {
+                    if (num_node_sets < c.node_type.size()) {
+                        // Inner Node
+                        bounds_q.push(b);
+                        num_node_sets++;
+                    } else {
+                        // Inner Node pointing to another chunk
+                        lh_dump_rec(f, vcnt_, c.child_chunk_offset + child_chunk_cnt++, b);
+                    }
                     // Inner Node
-                    bounds_q.push(b);
-                    num_node_sets++;
                 } else {
-                    // Inner Node pointing to another chunk
-                    lh_dump_rec(f, vcnt_, c.child_chunk_offset + child_chunk_cnt++, b);
+                    // Leaf Node
+                    // Vertices ausgeben
+                    for(uint32_t i = 0; i < 8; i++) {
+                        Float x = ((i & 1) == 0) ? b.pMin.x : b.pMax.x;
+                        Float y = ((i & 2) == 0) ? b.pMin.y : b.pMax.y;
+                        Float z = ((i & 4) == 0) ? b.pMin.z : b.pMax.z;
+                        fprintf(f, "v %f %f %f\n", x, y, z);
+                    }
+                    // Vertex indices ausgeben
+                    uint32_t vcnt = *vcnt_;
+                    fprintf(f, "f %d %d %d %d\n", vcnt    , vcnt + 1, vcnt + 5, vcnt + 4);//bottom
+                    fprintf(f, "f %d %d %d %d\n", vcnt + 2, vcnt + 3, vcnt + 7, vcnt + 6);//top
+                    fprintf(f, "f %d %d %d %d\n", vcnt    , vcnt + 1, vcnt + 3, vcnt + 2);//front
+                    fprintf(f, "f %d %d %d %d\n", vcnt + 4, vcnt + 5, vcnt + 7, vcnt + 6);//back
+                    fprintf(f, "f %d %d %d %d\n", vcnt    , vcnt + 4, vcnt + 6, vcnt + 2);//left
+                    fprintf(f, "f %d %d %d %d\n", vcnt + 1, vcnt + 5, vcnt + 7, vcnt + 3);//right
+                    *vcnt_ += 8;
                 }
-                // Inner Node
-            } else {
-                // Leaf Node
-                // Vertices ausgeben
-                for(uint32_t i = 0; i < 8; i++) {
-                    Float x = ((i & 1) == 0) ? b.pMin.x : b.pMax.x;
-                    Float y = ((i & 2) == 0) ? b.pMin.y : b.pMax.y;
-                    Float z = ((i & 4) == 0) ? b.pMin.z : b.pMax.z;
-                    fprintf(f, "v %f %f %f\n", x, y, z);
-                }
-                // Vertex indices ausgeben
-                uint32_t vcnt = *vcnt_;
-                fprintf(f, "f %d %d %d %d\n", vcnt    , vcnt + 1, vcnt + 5, vcnt + 4);//bottom
-                fprintf(f, "f %d %d %d %d\n", vcnt + 2, vcnt + 3, vcnt + 7, vcnt + 6);//top
-                fprintf(f, "f %d %d %d %d\n", vcnt    , vcnt + 1, vcnt + 3, vcnt + 2);//front
-                fprintf(f, "f %d %d %d %d\n", vcnt + 4, vcnt + 5, vcnt + 7, vcnt + 6);//back
-                fprintf(f, "f %d %d %d %d\n", vcnt    , vcnt + 4, vcnt + 6, vcnt + 2);//left
-                fprintf(f, "f %d %d %d %d\n", vcnt + 1, vcnt + 5, vcnt + 7, vcnt + 3);//right
-                *vcnt_ += 8;
             }
+            bounds_q.pop();
         }
-        bounds_q.pop();
     }
 }
 
