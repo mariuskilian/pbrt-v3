@@ -68,8 +68,9 @@ class OctreeAccel : public Aggregate {
 
     struct chunk {
       uint32_t child_chunk_offset;
-      uint32_t leaf_offset;
-      std::array<uint8_t, chunk_depth> node_type; // 0 inner node, 1 leaf node
+      uint32_t leaf_offset; // with size
+      // TODO: change uint8_t to uint32_t
+      std::array<uint8_t, chunk_depth> node_type; // 1 inner node, 0 leaf node
     };
     std::vector<chunk> octree;
     
