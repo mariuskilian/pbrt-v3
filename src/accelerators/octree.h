@@ -71,6 +71,7 @@ namespace pbrt {
 const int CHUNK_DEPTH = 5; // Size of chunk array of type BITFIELD_X below
 const int BITFIELD_SIZE = BF_SIZE;
 const int NUM_SETS_PER_BITFIELD = BITFIELD_SIZE / 8;
+const int NUM_SETS_PER_CHUNK = NUM_SETS_PER_BITFIELD * CHUNK_DEPTH;
 
 // OcteeAccel Declarations
 
@@ -100,6 +101,8 @@ class OctreeAccel : public Aggregate {
     Bounds3f octreeDivide(Bounds3f bounds, int idx) const;
     void Recurse(uint32_t root_node_offset, int chunk_idx);  
     void RecurseIntersect(const Ray &ray, SurfaceInteraction *isect, uint32_t chunk_offset, Bounds3f parent_bounds, bool &hit) const;
+    void lh_dump_rec_dfs(FILE *f, uint32_t *vcnt_, uint32_t chunk_offset, Bounds3f bounds);
+    void lh_dump_dfs(const char *path);
     void lh_dump_rec(FILE *f, uint32_t *vcnt_, uint32_t chunk_offset, Bounds3f bounds);
     void lh_dump(const char *path);
 
