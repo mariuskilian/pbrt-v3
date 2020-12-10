@@ -44,16 +44,6 @@
 #include "octree-basic.h"
 #include <array>
 
-namespace pbrt {
-
-#if defined(_MSC_VER)
-    #include "intrin.h"
-    #define POPCNT __popcnt64
-#elif defined(__clang__)
-    #include "popcntintrin.h"
-    #define POPCNT _mm_popcnt_u64
-#endif
-
 #define BITFIELD_64 // Change this to change bitfield sizes
   #if defined BITFIELD_8
     #define BF_SIZE 8
@@ -68,6 +58,9 @@ namespace pbrt {
     #define BF_SIZE 64
     #define BITFIELD_TYPE uint64_t
   #endif
+
+namespace pbrt {
+
 const int CHUNK_DEPTH = 5; // Size of chunk array of type BITFIELD_X below
 const int BITFIELD_SIZE = BF_SIZE;
 const int NUM_SETS_PER_BITFIELD = BITFIELD_SIZE / 8;

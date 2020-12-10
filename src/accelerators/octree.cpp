@@ -41,10 +41,15 @@
 #include <array>
 #include <queue>
 
-namespace pbrt {
+#if defined(_MSC_VER)
+    #include "intrin.h"
+    #define POPCNT __popcnt64
+#elif defined(__clang__)
+    #include "popcntintrin.h"
+    #define POPCNT _mm_popcnt_u64
+#endif
 
-const int MAX_DEPTH = 15; //15
-const int MAX_PRIMS = 32; //30
+namespace pbrt {
 
 Bounds3f OctreeAccel::octreeDivide(Bounds3f b, int idx) const {
     for (int i = 0; i < 3; i++) {
@@ -65,26 +70,35 @@ OctreeAccel::OctreeAccel(std::vector<std::shared_ptr<Primitive>> p) : primitives
         Recurse(0, 0);
     }
 
+    //lh_dump("visualize_bfs.obj");
     lh_dump_dfs("visualize_dfs.obj");
 }
 
-int rank(std::array<BITFIELD_TYPE, CHUNK_DEPTH> nodes, int node_idx) {
+int rank_intrinsics(std::array<BITFIELD_TYPE, CHUNK_DEPTH> nodes, int node_idx) {
     BITFIELD_TYPE bits;
     BITFIELD_TYPE count = 0;
     for (int i = 0; i < CHUNK_DEPTH; i++) {
         bits = nodes[i];
         if (node_idx < 64) break;
-        count += POPCNT(bits);
+        //count += POPCNT(bits);
         node_idx -= 64;
     }
-    return count + POPCNT(bits & ((1 << node_idx) - 1));
+    //count += POPCNT(bits & ((1 << node_idx) - 1));
+    return count;
+}
+
+int rank(BITFIELD_TYPE bits, int idx = 64) {
+    int count = 0;
+    if (idx < 64) bits &= ((1 << idx) - 1);
+    for (int i = 0; i < idx; i++) if (((bits >> i) & 1) == 1) count++;
+    return count;
 }
 
 // TODO rename
 struct InnerNodeHit { int children_offset; Bounds3f bounds; };
 struct ChildHit { int idx; float tMin; };
 
-void shift_array_at(std::array<InnerNodeHit, NUM_SETS_PER_CHUNK + 1> traversal, int fill_size, int idx, int amount) {
+void shift_array_at(std::array<InnerNodeHit, NUM_SETS_PER_CHUNK + 1> &traversal, int fill_size, int idx, int amount) {
     for (int i = fill_size + amount - 1; i > idx; i--) traversal[i] = traversal[i-amount];
 }
 
@@ -131,19 +145,26 @@ void OctreeAccel::RecurseIntersect(const Ray &ray, SurfaceInteraction *isect, ui
         std::sort(child_traversal.begin(), child_traversal.begin() + child_traversal_size, [](const ChildHit &a, const ChildHit &b) {return a.tMin < b.tMin;});
         // 3rd Step: Traverse child nodes in order
         // Prepare array by shifting it to the right enough to insert children
-        shift_array_at(traversal, traversal_size++, traversal_idx, child_traversal_size);
+        shift_array_at(traversal, traversal_size, traversal_idx, child_traversal_size);
+        traversal_size += child_traversal_size;
+
         int children_set_idx = node.children_offset / NUM_SETS_PER_BITFIELD;
         int children_bitfield_offset = 8 * (node.children_offset % NUM_SETS_PER_BITFIELD);
+
+        int child_children_offset = 0;
+        for (int i = 0; i < children_set_idx; i++) child_children_offset += rank(c.node_type[i]);
+
         for (int i = 0; i < child_traversal_size; i++) {
             // Kindknoten werden dann nicht mehr traversiert, wenn bereits ein näherer Schnitt ermittelt wurde
             // Dadurch deckt man auch den Fall ab, dass zwar ein Schnitt gefunden wurde, dieser aber außerhalb der Knotens liegt
             if (child_traversal[i].tMin > ray.tMax) continue;
-
-            int child_children_offset = -1;
+            // Check children for node type and find rank if inner node
+            int cco = children_bitfield_offset;
             if (((c.node_type[children_set_idx] >> (children_bitfield_offset + child_traversal[i].idx)) & 1) == 1)
-                child_children_offset = rank(c.node_type, node.children_offset * 8 + child_traversal[i].idx) + 1;
+                cco += rank(c.node_type[children_set_idx], children_bitfield_offset + child_traversal[i].idx) + 1;
+            else cco = -1;
             Bounds3f child_bounds = octreeDivide(node.bounds, child_traversal[i].idx);
-            traversal[traversal_idx + i] = InnerNodeHit{child_children_offset, child_bounds};
+            traversal[traversal_idx + i] = InnerNodeHit{cco, child_bounds};
         }
     }
 }
@@ -260,7 +281,8 @@ void OctreeAccel::lh_dump_rec_dfs(FILE *f, uint32_t *vcnt_, uint32_t chunk_offse
             fprintf(f, "f %d %d %d %d\n", vcnt + 1, vcnt + 5, vcnt + 7, vcnt + 3);//right
             *vcnt_ += 8;
             continue;
-        } else if (node.children_offset >= NUM_SETS_PER_CHUNK) {
+        }
+        if (node.children_offset >= NUM_SETS_PER_CHUNK) {
             // Chunk Pointer Inner Node
             uint32_t cco = c.child_chunk_offset + node.children_offset - NUM_SETS_PER_CHUNK;
             lh_dump_rec_dfs(f, vcnt_, cco, node.bounds);
@@ -268,18 +290,25 @@ void OctreeAccel::lh_dump_rec_dfs(FILE *f, uint32_t *vcnt_, uint32_t chunk_offse
         }
 
         // Prepare array by shifting it to the right enough to insert children
-        shift_array_at(traversal, traversal_size++, traversal_idx, 8);
+        shift_array_at(traversal, traversal_size, traversal_idx, 8);
+        traversal_size += 8;
+
         int children_set_idx = node.children_offset / NUM_SETS_PER_BITFIELD;
         int children_bitfield_offset = 8 * (node.children_offset % NUM_SETS_PER_BITFIELD);
 
+        int child_children_offset = 0;
+        for (int i = 0; i < children_set_idx; i++) child_children_offset += rank(c.node_type[i]);
+
         for (int i = 0; i < 8; i++) {
-            int child_children_offset = -1;
             // Check children for node type and find rank if inner node
-            if (((c.node_type[children_set_idx] >> (children_bitfield_offset + i)) & 1) == 1)
-                child_children_offset = rank(c.node_type, node.children_offset * 8 + i) + 1;
+            int cco = child_children_offset;
+            if (((c.node_type[children_set_idx] >> (children_bitfield_offset + i)) & (BITFIELD_TYPE)1) == (BITFIELD_TYPE)1)
+                cco += rank(c.node_type[children_set_idx], children_bitfield_offset + i) + 1;
+            else cco = -1;
             Bounds3f child_bounds = octreeDivide(node.bounds, i);
-            traversal[traversal_idx + i] = InnerNodeHit{child_children_offset, child_bounds};
+            traversal[traversal_idx + i] = InnerNodeHit{cco, child_bounds};
         }
+        int x = 3;
     }
 }
 
