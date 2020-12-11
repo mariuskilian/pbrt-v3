@@ -74,23 +74,23 @@ OctreeAccel::OctreeAccel(std::vector<std::shared_ptr<Primitive>> p) : primitives
     lh_dump_dfs("visualize_dfs.obj");
 }
 
-// int rank(BITFIELD_TYPE bits, int idx = 64) {
-//     if (idx < 64) bits &= ((1 << idx) - 1);
-//     return POPCNT(bits);
-// }
-
-BITFIELD_TYPE rank(BITFIELD_TYPE bits, int idx = 64) {
-    BITFIELD_TYPE count = 0;
+int rank(BITFIELD_TYPE bits, int idx = 64) {
     if (idx < 64) bits &= ((1 << idx) - 1);
-    for (BITFIELD_TYPE i = 0; i < idx; i++) if (((bits >> i) & 1ull) == 1) count++;
-    return count;
+    return POPCNT(bits);
 }
+
+// BITFIELD_TYPE rank(BITFIELD_TYPE bits, int idx = 64) {
+//     BITFIELD_TYPE count = 0;
+//     if (idx < 64) bits &= ((1 << idx) - 1);
+//     for (BITFIELD_TYPE i = 0; i < idx; i++) if (((bits >> i) & 1ull) == 1) count++;
+//     return count;
+// }
 
 // TODO rename
 struct InnerNodeHit { int children_offset; Bounds3f bounds; };
 struct ChildHit { int idx; float tMin; };
 
-void shift_array_at(std::array<InnerNodeHit, NUM_SETS_PER_CHUNK + 1> &traversal, int fill_size, int idx, int amount) {
+void shift_array_at(std::array<InnerNodeHit, (BITFIELD_SIZE * CHUNK_DEPTH) + 1> &traversal, int fill_size, int idx, int amount) {
     for (int i = fill_size + amount - 1; i > idx; i--) traversal[i] = traversal[i-amount];
 }
 
@@ -99,7 +99,7 @@ void OctreeAccel::RecurseIntersect(const Ray &ray, SurfaceInteraction *isect, ui
     chunk c = octree[chunk_offset];
 
     // TODO: vielleicht immer nur 1 child pro set auf einmal in array, und platz sparen
-    std::array<InnerNodeHit, NUM_SETS_PER_CHUNK + 1> traversal;
+    std::array<InnerNodeHit, (BITFIELD_SIZE * CHUNK_DEPTH) + 1> traversal;
     int traversal_idx = 0;
     traversal[traversal_idx] = InnerNodeHit{0, parent_bounds};
     int traversal_size = 1;
@@ -134,7 +134,8 @@ void OctreeAccel::RecurseIntersect(const Ray &ray, SurfaceInteraction *isect, ui
         }
         // 2nd Step: Sort all children by smallest tMin parameter
         // TODO eigene sortierung (bei 8 elementen ist ein naives insertionsort whr. besser)
-        std::sort(child_traversal.begin(), child_traversal.begin() + child_traversal_size, [](const ChildHit &a, const ChildHit &b) {return a.tMin < b.tMin;});
+        std::sort(child_traversal.begin(), child_traversal.begin() + child_traversal_size,
+            [](const ChildHit &a, const ChildHit &b) {return a.tMin < b.tMin;});
         // 3rd Step: Traverse child nodes in order
         // Prepare array by shifting it to the right enough to insert children
         shift_array_at(traversal, traversal_size, traversal_idx, child_traversal_size);
@@ -244,9 +245,9 @@ void OctreeAccel::lh_dump_rec_dfs(FILE *f, uint32_t *vcnt_, uint32_t chunk_offse
     chunk c = octree[chunk_offset];
 
     // TODO: vielleicht immer nur 1 child pro set auf einmal in array, und platz sparen
-    std::array<InnerNodeHit, NUM_SETS_PER_CHUNK + 1> traversal;
+    std::array<InnerNodeHit, (BITFIELD_SIZE * CHUNK_DEPTH) + 1> traversal;
+    traversal[0] = InnerNodeHit{0, bounds};
     int traversal_idx = 0;
-    traversal[traversal_idx] = InnerNodeHit{0, bounds};
     int traversal_size = 1;
 
     // Handle all nodes in this chunk in the proper order (Depth First Search)
@@ -294,11 +295,12 @@ void OctreeAccel::lh_dump_rec_dfs(FILE *f, uint32_t *vcnt_, uint32_t chunk_offse
         for (int i = 0; i < 8; i++) {
             // Check children for node type and find rank if inner node
             int cco = child_children_offset;
-            if (((c.node_type[children_set_idx] >> (children_bitfield_offset + i)) & (BITFIELD_TYPE)1) == (BITFIELD_TYPE)1)
+            if (((c.node_type[children_set_idx] >> (children_bitfield_offset + i)) & 1) == 1)
                 cco += rank(c.node_type[children_set_idx], children_bitfield_offset + i) + 1;
             else cco = -1;
             Bounds3f child_bounds = octreeDivide(node.bounds, i);
             traversal[traversal_idx + i] = InnerNodeHit{cco, child_bounds};
+            int x = 3;
         }
     }
 }
