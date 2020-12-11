@@ -74,23 +74,15 @@ OctreeAccel::OctreeAccel(std::vector<std::shared_ptr<Primitive>> p) : primitives
     lh_dump_dfs("visualize_dfs.obj");
 }
 
-int rank_intrinsics(std::array<BITFIELD_TYPE, CHUNK_DEPTH> nodes, int node_idx) {
-    BITFIELD_TYPE bits;
-    BITFIELD_TYPE count = 0;
-    for (int i = 0; i < CHUNK_DEPTH; i++) {
-        bits = nodes[i];
-        if (node_idx < 64) break;
-        //count += POPCNT(bits);
-        node_idx -= 64;
-    }
-    //count += POPCNT(bits & ((1 << node_idx) - 1));
-    return count;
-}
+// int rank(BITFIELD_TYPE bits, int idx = 64) {
+//     if (idx < 64) bits &= ((1 << idx) - 1);
+//     return POPCNT(bits);
+// }
 
-int rank(BITFIELD_TYPE bits, int idx = 64) {
-    int count = 0;
+BITFIELD_TYPE rank(BITFIELD_TYPE bits, int idx = 64) {
+    BITFIELD_TYPE count = 0;
     if (idx < 64) bits &= ((1 << idx) - 1);
-    for (int i = 0; i < idx; i++) if (((bits >> i) & 1) == 1) count++;
+    for (BITFIELD_TYPE i = 0; i < idx; i++) if (((bits >> i) & 1ull) == 1) count++;
     return count;
 }
 
@@ -160,9 +152,9 @@ void OctreeAccel::RecurseIntersect(const Ray &ray, SurfaceInteraction *isect, ui
             if (child_traversal[i].tMin > ray.tMax) continue;
             // Check children for node type and find rank if inner node
             int cco = children_bitfield_offset;
-            if (((c.node_type[children_set_idx] >> (children_bitfield_offset + child_traversal[i].idx)) & 1) == 1)
+            if (((c.node_type[children_set_idx] >> (children_bitfield_offset + child_traversal[i].idx)) & 1) == 1) {
                 cco += rank(c.node_type[children_set_idx], children_bitfield_offset + child_traversal[i].idx) + 1;
-            else cco = -1;
+            } else cco = -1;
             Bounds3f child_bounds = octreeDivide(node.bounds, child_traversal[i].idx);
             traversal[traversal_idx + i] = InnerNodeHit{cco, child_bounds};
         }
@@ -308,7 +300,6 @@ void OctreeAccel::lh_dump_rec_dfs(FILE *f, uint32_t *vcnt_, uint32_t chunk_offse
             Bounds3f child_bounds = octreeDivide(node.bounds, i);
             traversal[traversal_idx + i] = InnerNodeHit{cco, child_bounds};
         }
-        int x = 3;
     }
 }
 
