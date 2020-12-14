@@ -61,10 +61,12 @@
 
 namespace pbrt {
 
-const int CHUNK_DEPTH = 5; // Size of chunk array of type BITFIELD_X below
+const int CHUNK_DEPTH = 7; // Size of chunk array of type BITFIELD_X below
 const int BITFIELD_SIZE = BF_SIZE;
 const int NUM_SETS_PER_BITFIELD = BITFIELD_SIZE / 8;
 const int NUM_SETS_PER_CHUNK = NUM_SETS_PER_BITFIELD * CHUNK_DEPTH;
+const BITFIELD_TYPE ZERO = (BITFIELD_TYPE)0;
+const BITFIELD_TYPE ONE = (BITFIELD_TYPE)1;
 
 // OcteeAccel Declarations
 
@@ -84,11 +86,14 @@ class OctreeAccel : public Aggregate {
     Bounds3f wb; // World Bounds
     OctreeBasicAccel oba;
 
-    struct chunk {
+    struct alignas(64) chunk {
       uint32_t child_chunk_offset;
-      uint32_t leaf_offset; // with size
+      uint32_t leaf_offset;
+      // TODO sizes array ausserhalb chunks
+      std::array<int, 7 * NUM_SETS_PER_BITFIELD> sizes;
       std::array<BITFIELD_TYPE, CHUNK_DEPTH> node_type; // 1 inner node, 0 leaf node
     };
+    // TODO make sure array is aligned to 64-bit addresses
     std::vector<chunk> octree;
     
     Bounds3f octreeDivide(Bounds3f bounds, int idx) const;
@@ -99,6 +104,7 @@ class OctreeAccel : public Aggregate {
     void lh_dump_rec(FILE *f, uint32_t *vcnt_, uint32_t chunk_offset, Bounds3f bounds);
     void lh_dump(const char *path);
 
+    std::vector<std::shared_ptr<Primitive>> leaves;
 };
 
 std::shared_ptr<OctreeAccel> CreateOctreeAccelerator(
