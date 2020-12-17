@@ -45,7 +45,6 @@
     #include "intrin.h"
     #define POPCNT __popcnt64
 #elif defined(__clang__)
-    #define POPCNT2 __builtin_popcountll
     #include "popcntintrin.h"
     #define POPCNT _mm_popcnt_u64
 #endif
@@ -67,7 +66,7 @@ OctreeAccel::OctreeAccel(std::vector<std::shared_ptr<Primitive>> p) : primitives
     wb = oba.WorldBound();
     
     if (oba.Nodes().size() > 1) {
-        octree.push_back(chunk{});
+        octree.push_back(Chunk{});
         Recurse(0, 0);
     }
 
@@ -88,17 +87,47 @@ int rank(BITFIELD_TYPE bits, int idx = 64) {
 // }
 
 // TODO rename
-struct InnerNodeHit { int children_offset; Bounds3f bounds; };
-struct ChildHit { BITFIELD_TYPE idx; float tMin; };
 
-void shift_array_at(std::array<InnerNodeHit, (BITFIELD_SIZE * CHUNK_DEPTH) + 1> &traversal, int fill_size, int idx, int amount) {
-    for (int i = fill_size + amount - 1; i > idx; i--) traversal[i] = traversal[i-amount];
+struct InnerNodeHit { int children_offset; Bounds3f bounds; };
+struct ChildHit { int idx; float tMin; };
+
+struct ChildTraversal{
+    std::array<ChildHit, 8> children;
+    int size;
+};
+
+ChildTraversal OctreeAccel::FindTraversalOrder(const Ray &ray, Bounds3f b_parent) const {
+        int child_traversal_size = 0;
+        std::array<ChildHit, 8> child_traversal; // It can happen that more than 4 nodes are intersected when using intersectP
+        // 1st Step: Intersect all child bounding boxes and determine t parameter
+        for (BITFIELD_TYPE i = 0; i < 8; i++) {
+            //Maybe TODO: try to only octreeDivide once (see above)
+            Bounds3f child_bounds = octreeDivide(b_parent, i);
+            ChildHit child_hit = {i};
+            float tMax;
+            // TODO Optimierte Variante implementieren (3 Ebenentests)
+            if (child_bounds.IntersectP(ray, &child_hit.tMin, &tMax)) child_traversal[child_traversal_size++] = child_hit; 
+        }
+        // 2nd Step: Sort all children by smallest tMin parameter
+        // TODO eigene sortierung (bei 8 elementen ist ein naives insertionsort whr. besser)
+        std::sort(child_traversal.begin(), child_traversal.begin() + child_traversal_size,
+            [](const ChildHit &a, const ChildHit &b) {return a.tMin < b.tMin;});
+        return ChildTraversal{child_traversal, child_traversal_size};
 }
 
 // TODO Rekursion in Schleife umwandeln (schneller)
 void OctreeAccel::RecurseIntersect(const Ray &ray, SurfaceInteraction *isect, uint32_t chunk_offset, Bounds3f parent_bounds, bool &hit) const {
-    chunk c = octree[chunk_offset];
+    Chunk c = octree[chunk_offset];
 
+    std::array<InnerNodeHit, (BITFIELD_SIZE * CHUNK_DEPTH)> traversal;
+    std::array<ChildHit, 8> child_traversal = FindTraversalOrder(ray, parent_bounds);
+    for 
+    int traversal_idx = 7;
+
+    while (traversal_idx >= 0) {
+
+    }
+    
     // TODO: vielleicht immer nur 1 child pro set auf einmal in array, und platz sparen
     std::array<InnerNodeHit, (BITFIELD_SIZE * CHUNK_DEPTH) + 1> traversal;
     traversal[0] = InnerNodeHit{0, parent_bounds};
@@ -126,22 +155,6 @@ void OctreeAccel::RecurseIntersect(const Ray &ray, SurfaceInteraction *isect, ui
             RecurseIntersect(ray, isect, cco, node.bounds, hit);
             continue;
         }
-
-        int child_traversal_size = 0;
-        std::array<ChildHit, 8> child_traversal; // It can happen that more than 4 nodes are intersected when using intersectP
-        // 1st Step: Intersect all child bounding boxes and determine t parameter
-        for (BITFIELD_TYPE i = 0; i < 8; i++) {
-            //Maybe TODO: try to only octreeDivide once (see above)
-            Bounds3f child_bounds = octreeDivide(node.bounds, i);
-            ChildHit child_hit = {i};
-            float tMax;
-            // TODO Optimierte Variante implementieren (3 Ebenentests)
-            if (child_bounds.IntersectP(ray, &child_hit.tMin, &tMax)) child_traversal[child_traversal_size++] = child_hit; 
-        }
-        // 2nd Step: Sort all children by smallest tMin parameter
-        // TODO eigene sortierung (bei 8 elementen ist ein naives insertionsort whr. besser)
-        std::sort(child_traversal.begin(), child_traversal.begin() + child_traversal_size,
-            [](const ChildHit &a, const ChildHit &b) {return a.tMin < b.tMin;});
         // 3rd Step: Traverse child nodes in order
         // Prepare array by shifting it to the right enough to insert children
         // TODO Stacks - inverteriere reihenfolge wie knoten in traversal array hinzugefuegt werden
@@ -187,7 +200,7 @@ void OctreeAccel::Recurse(uint32_t root_node_offset, int chunk_idx) {
 
     uint32_t root_child_offset = oba.Nodes()[root_node_offset] >> 1;
     std::queue<uint32_t> bfs_nodes_q;
-    for (int i = 0; i < 8; i++) { bfs_nodes_q.push(root_child_offset + i); }
+    for (int i = 0; i < 8; i++) bfs_nodes_q.push(root_child_offset + i);
 
     int chunk_fill_size = 1; // number of [set of 8 nodes] reserved in chunk
     int num_nodes = 0; // number of individual nodes already processed
@@ -214,7 +227,7 @@ void OctreeAccel::Recurse(uint32_t root_node_offset, int chunk_idx) {
             if (chunk_fill_size == NUM_SETS_PER_CHUNK) {
                 // Chunk is full, need to make new chunk
                 chunk_ptr_nodes.push_back(node_offset);
-                octree.push_back(chunk{}); // reserve chunk slot
+                octree.push_back(Chunk{}); // reserve chunk slot
             } else {
                 // Chunk has space for children
                 uint32_t child_offset = oba.Nodes()[node_offset] >> 1;
@@ -259,7 +272,7 @@ OctreeAccel::~OctreeAccel() { //FreeAligned(nodes2);
 
 // Code to visualize octree
 void OctreeAccel::lh_dump_rec_dfs(FILE *f, uint32_t *vcnt_, uint32_t chunk_offset, Bounds3f bounds) {
-    chunk c = octree[chunk_offset];
+    Chunk c = octree[chunk_offset];
 
     // TODO: vielleicht immer nur 1 child pro set auf einmal in array, und platz sparen
     std::array<InnerNodeHit, (BITFIELD_SIZE * CHUNK_DEPTH) + 1> traversal;
@@ -323,7 +336,7 @@ void OctreeAccel::lh_dump_rec_dfs(FILE *f, uint32_t *vcnt_, uint32_t chunk_offse
 }
 
 void OctreeAccel::lh_dump_rec(FILE *f, uint32_t *vcnt_, uint32_t chunk_offset, Bounds3f bounds) {
-    chunk c = octree[chunk_offset];
+    Chunk c = octree[chunk_offset];
 
     std::queue<Bounds3f> bounds_q;
     bounds_q.push(bounds);
