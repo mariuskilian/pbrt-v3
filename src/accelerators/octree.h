@@ -46,10 +46,12 @@
 
 namespace pbrt {
 
+// Change these for different types/sizes
 typedef uint64_t BITFIELD_TYPE;
-const int BF_SIZE = 64;
 const int CHUNK_DEPTH = 7; // Size of chunk array of type BITFIELD_X below
-const int BITFIELD_SIZE = BF_SIZE;
+
+// DON'T change these!
+const int BITFIELD_SIZE = 8 * sizeof(BITFIELD_TYPE);
 const int NUM_SETS_PER_BITFIELD = BITFIELD_SIZE / 8;
 const int NUM_SETS_PER_CHUNK = NUM_SETS_PER_BITFIELD * CHUNK_DEPTH;
 const BITFIELD_TYPE ZERO = (BITFIELD_TYPE)0;
@@ -77,23 +79,21 @@ class OctreeAccel : public Aggregate {
       uint32_t child_chunk_offset;
       uint32_t leaf_offset;
       // TODO sizes array ausserhalb chunks
-      std::array<int, 7 * NUM_SETS_PER_BITFIELD> sizes;
-      std::array<BITFIELD_TYPE, CHUNK_DEPTH> node_type; // 1 inner node, 0 leaf node
+      std::array<BITFIELD_TYPE, CHUNK_DEPTH> nodes; // 1 inner node, 0 leaf node
     };
+    std::vector<std::shared_ptr<Primitive>> leaves;
+    std::vector<int> sizes;
 
     // TODO make sure array is aligned to 64-bit addresses
     std::vector<Chunk> octree;
     
-    Bounds3f octreeDivide(Bounds3f bounds, int idx) const;
     void Recurse(uint32_t root_node_offset, int chunk_idx); 
-    ChildTraversal FindTraversalOrder(const Ray &ray, Bounds3f p_parent) const; 
     void RecurseIntersect(const Ray &ray, SurfaceInteraction *isect, uint32_t chunk_offset, Bounds3f parent_bounds, bool &hit) const;
-    void lh_dump_rec_dfs(FILE *f, uint32_t *vcnt_, uint32_t chunk_offset, Bounds3f bounds);
-    void lh_dump_dfs(const char *path);
-    void lh_dump_rec(FILE *f, uint32_t *vcnt_, uint32_t chunk_offset, Bounds3f bounds);
     void lh_dump(const char *path);
+    void lh_dump_rec(FILE *f, uint32_t *vcnt_, uint32_t chunk_offset, Bounds3f bounds);
+    void lh_dump_dfs(const char *path);
+    void lh_dump_rec_dfs(FILE *f, uint32_t *vcnt_, uint32_t chunk_offset, Bounds3f bounds);
 
-    std::vector<std::shared_ptr<Primitive>> leaves;
 };
 
 std::shared_ptr<OctreeAccel> CreateOctreeAccelerator(
