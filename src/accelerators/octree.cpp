@@ -120,7 +120,7 @@ OctreeAccel::OctreeAccel(std::vector<std::shared_ptr<Primitive>> p) : primitives
 
 void OctreeAccel::Recurse(uint32_t root_node_offset, int chunk_idx) {
     octree[chunk_idx].child_chunk_offset = octree.size();
-    octree[chunk_idx].leaf_offset = leaves.size();
+    octree[chunk_idx].sizes_offset = sizes.size();
 
     uint32_t root_child_offset = oba.Nodes()[root_node_offset] >> 1;
     std::queue<uint32_t> bfs_nodes_q;
@@ -160,7 +160,7 @@ void OctreeAccel::Recurse(uint32_t root_node_offset, int chunk_idx) {
             uint32_t prim_start = oba.Nodes()[node_offset] >> 1;
             uint32_t prim_end = prim_start + oba.Sizes()[node_offset];
             sizes.push_back(sizes.back() + oba.Sizes()[node_offset]);
-            leaves.insert(leaves.end(), oba.leaves.begin() + prim_start, oba.leaves.begin() + prim_end);
+            leaves.insert(leaves.end(), oba.Leaves().begin() + prim_start, oba.Leaves().begin() + prim_end);
         }
 
         num_nodes++;
@@ -223,9 +223,9 @@ void OctreeAccel::RecurseIntersect(const Ray &ray, SurfaceInteraction *isect, ui
             }
         } else {
             // Leaf Node
-            int leaf_idx = c.leaf_offset - node.bitcnt - 1;
-            uint32_t prim_start = 0;//sizes[leaf_idx];
-            uint32_t prim_end = 5;//sizes[leaf_idx + 1];
+            int leaf_idx = c.sizes_offset - node.bitcnt - 1;
+            uint32_t prim_start = sizes[leaf_idx - 1];
+            uint32_t prim_end = sizes[leaf_idx];
             for (uint32_t i = prim_start; i < prim_end; i++)
                 // TODO LRU-Cache/Mailboxing, damit man nicht mehrmals dasselbe primitiv testen muss
                 if (leaves[i].get()->Intersect(ray, isect)) hit = true;

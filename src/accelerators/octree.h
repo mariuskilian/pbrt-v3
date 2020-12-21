@@ -77,7 +77,7 @@ class OctreeAccel : public Aggregate {
 
     struct alignas(64) Chunk {
       uint32_t child_chunk_offset;
-      uint32_t leaf_offset;
+      uint32_t sizes_offset;
       // TODO sizes array ausserhalb chunks
       std::array<BITFIELD_TYPE, CHUNK_DEPTH> nodes; // 1 inner node, 0 leaf node
     };
