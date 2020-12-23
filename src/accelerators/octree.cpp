@@ -57,7 +57,9 @@ struct Node { int bitcnt; Bounds3f bounds; };
 struct ChildHit { int idx; Bounds3f bounds; float tMin; };
 struct ChildTraversal{ std::array<ChildHit, 8> nodes; int size; };
 
-Bounds3f DivideBounds(Bounds3f b, int idx) {
+// TODO extract helper functions in octree-basic, then refer to those from here
+// TODO give axisHalf as parameter; Inline
+inline Bounds3f DivideBounds(Bounds3f b, int idx) {
     for (int i = 0; i < 3; i++) {
         Float axisHalf = (b.pMin[i] + b.pMax[i]) / 2;
         if ((idx & (1<<i)) == 0) b.pMax[i] = axisHalf;
@@ -66,13 +68,13 @@ Bounds3f DivideBounds(Bounds3f b, int idx) {
     return b;
 }
 
-bool IsInnerNode(std::array<BITFIELD_TYPE, CHUNK_DEPTH> bitfield, int n) {
+inline bool IsInnerNode(std::array<BITFIELD_TYPE, CHUNK_DEPTH> bitfield, int n) {
     int i = n / BITFIELD_SIZE;
     int offset = n % BITFIELD_SIZE;
     return ((bitfield[i] >> offset) & 1) == 1;
 }
 
-int Rank(std::array<BITFIELD_TYPE, CHUNK_DEPTH> bitfield, int n) {
+inline int Rank(std::array<BITFIELD_TYPE, CHUNK_DEPTH> bitfield, int n) {
     int count = 0;
     BITFIELD_TYPE bits;
     for (int i = 0; i < CHUNK_DEPTH; i++) {
@@ -85,7 +87,7 @@ int Rank(std::array<BITFIELD_TYPE, CHUNK_DEPTH> bitfield, int n) {
     return count;
 }
 
-ChildTraversal FindTraversalOrder(const Ray &ray, Bounds3f b_parent) {
+inline ChildTraversal FindTraversalOrder(const Ray &ray, Bounds3f b_parent) {
         int size = 0;
         std::array<ChildHit, 8> traversal; // It can happen that more than 4 nodes are intersected when using intersectP
         // 1st Step: Intersect all child bounding boxes and determine t parameter
@@ -106,6 +108,7 @@ ChildTraversal FindTraversalOrder(const Ray &ray, Bounds3f b_parent) {
 
 // === OCTREE STRUCT CREATION ==
 OctreeAccel::OctreeAccel(std::vector<std::shared_ptr<Primitive>> p) : primitives(std::move(p)) {
+    printf("Start aufbau\n");
     oba = OctreeBasicAccel(primitives);
     wb = oba.WorldBound();
     

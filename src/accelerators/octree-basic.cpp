@@ -141,6 +141,7 @@ bool OctreeBasicAccel::Intersect(const Ray &ray, SurfaceInteraction *isect) cons
 
 void OctreeBasicAccel::Recurse(int offset, std::vector<std::shared_ptr<Primitive>> primitives, Bounds3f bounds, int depth) {        
 
+    // TODO primitives partitionieren in brauche ich/brauche ich nicht: std::partition
     std::vector<std::shared_ptr<Primitive>> prims;
     for (int i = 0; i < primitives.size(); i++) {
         std::shared_ptr<Primitive> p = primitives.at(i);
