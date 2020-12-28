@@ -59,11 +59,16 @@ struct ChildTraversal{ std::array<ChildHit, 8> nodes; int size; };
 
 // TODO extract helper functions in octree-basic, then refer to those from here
 // TODO give axisHalf as parameter; Inline
-inline Bounds3f DivideBounds(Bounds3f b, int idx) {
+inline Vector3f BoundsHalf(Bounds3f b) {
+    Vector3f h;
+    for (int i = 0; i < 3; i++) h[i] = (b.pMin[i] + b.pMax[i]) / 2;
+    return h;
+}
+
+inline Bounds3f DivideBounds(Bounds3f b, int idx, Vector3f b_half) {
     for (int i = 0; i < 3; i++) {
-        Float axisHalf = (b.pMin[i] + b.pMax[i]) / 2;
-        if ((idx & (1<<i)) == 0) b.pMax[i] = axisHalf;
-        else b.pMin[i] = axisHalf;
+        if ((idx & (1<<i)) == 0) b.pMax[i] = b_half[i];
+        else b.pMin[i] = b_half[i];
     }
     return b;
 }
@@ -87,13 +92,14 @@ inline int Rank(std::array<BITFIELD_TYPE, CHUNK_DEPTH> bitfield, int n) {
     return count;
 }
 
-inline ChildTraversal FindTraversalOrder(const Ray &ray, Bounds3f b_parent) {
+inline ChildTraversal FindTraversalOrder(const Ray &ray, Bounds3f b) {
         int size = 0;
-        std::array<ChildHit, 8> traversal; // It can happen that more than 4 nodes are intersected when using intersectP
+        std::array<ChildHit, 8> traversal; // It can happen that more than 4 nodes are intersected when using intersect
+        // Pre calculate bounds half, since they are needed for every child
+        Vector3f b_h = BoundsHalf(b);
         // 1st Step: Intersect all child bounding boxes and determine t parameter
         for (int i = 0; i < 8; i++) {
-            //Maybe TODO: try to only octreeDivide once (see above)
-            Bounds3f child_bounds = DivideBounds(b_parent, i);
+            Bounds3f child_bounds = DivideBounds(b, i, b_h);
             ChildHit child_hit = { i, child_bounds };
             float tMax;
             // TODO Optimierte Variante implementieren (3 Ebenentests)
@@ -265,10 +271,11 @@ void OctreeAccel::lh_dump_rec(FILE *f, uint32_t *vcnt_, uint32_t chunk_offset, B
     for (int idx = 0; idx < CHUNK_DEPTH; idx++) {
         for (BITFIELD_TYPE set = 0; set < NUM_SETS_PER_BITFIELD; set++) {
             if (current_set_idx++ >= num_node_sets) break; // This chunk wasn't completely filled
-
+            
             // Go through current nodes children
+            Vector3f b_h = BoundsHalf(bounds_q.front());
             for (BITFIELD_TYPE bit = 0; bit < 8; bit++) {
-                Bounds3f b = DivideBounds(bounds_q.front(), bit);
+                Bounds3f b = DivideBounds(bounds_q.front(), bit, b_h);
                 if (((c.nodes[idx] >> (set*8 + bit)) & ONE) == ONE) {
                     if (num_node_sets < NUM_SETS_PER_CHUNK) {
                         // Inner Node
@@ -326,12 +333,13 @@ void OctreeAccel::lh_dump_rec_dfs(FILE *f, uint32_t *vcnt_, uint32_t chunk_offse
             // Inner Node ... 
             if (node.bitcnt < NUM_SETS_PER_CHUNK) {
                 // ... with children in same chunk
+                Vector3f b_h = BoundsHalf(node.bounds);
                 for (int i = 7; i >= 0; i--) {
                     // Kindknoten werden dann nicht mehr traversiert, wenn bereits ein näherer Schnitt ermittelt wurde
                     // Dadurch deckt man auch den Fall ab, dass zwar ein Schnitt gefunden wurde, dieser aber außerhalb der Knotens liegt
                     int idx = 8 * node.bitcnt + i;
                     int bitcnt = Rank(c.nodes, idx) + (IsInnerNode(c.nodes, idx) ? 1 : -(idx + 1));
-                    traversal[++traversal_idx] = Node{bitcnt, DivideBounds(node.bounds, i)};
+                    traversal[++traversal_idx] = Node{bitcnt, DivideBounds(node.bounds, i, b_h)};
                 }
             } else {
                 // ... with chilren in different chunk
