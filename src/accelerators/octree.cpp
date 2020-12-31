@@ -97,43 +97,41 @@ ChildTraversal FindTraversalOrder(const Ray &ray, Bounds3f b, Float tMin) {
     int size = 1;
     std::array<ChildHit, 4> traversal;
     Vector3f b_h = BoundsHalf(b);
-
     // First child hit
     int idx = 0;
     Point3f init_point = ray.o + tMin * ray.d;
     for (int i = 0; i < 3; i++) if (init_point[i] > b_h[i]) idx |= (1<<i);
     traversal[0] = ChildHit{ idx, tMin };
-
     // Cut all bound-half-planes, and if intersection is within bounds, add to list
     for (int axis = 0; axis < 3; axis++) {
+        if (ray.d[axis] == 0) continue;
         Float t = (b_h[axis] - ray.o[axis]) / ray.d[axis];
+        if (t < tMin || t > ray.tMax) continue;
         Point3f p = ray.o + t * ray.d;
-        // Discard point if it's outside of the bounds
         for (int i = 0; i < 3; i++) if (p[i] < b.pMin[i] || p[i] > b.pMax[i]) continue;
+        // Add point to traversal array. It's index is currently only the to-be-flipped axis
         traversal[size++] = ChildHit{ 1<<axis, t };
     }
-
     // Sort list based on smallest tMin
     std::sort(traversal.begin() + 1, traversal.begin() + size, 
         [](const ChildHit &c1, const ChildHit &c2) {return c1.tMin < c2.tMin;});
-    
     // Finally, determine idx for each child hit
     for (int i = 1; i < size; i++) traversal[i].idx ^= traversal[i-1].idx;
-
     return ChildTraversal{traversal, size};
 }
 
-// inline ChildTraversal FindTraversalOrder(const Ray &ray, Bounds3f b, Float tMin) {
+// ChildTraversal FindTraversalOrder(const Ray &ray, Bounds3f b, Float tMin) {
 //         int size = 0;
-//         std::array<ChildHit, 8> traversal; // It can happen that more than 4 nodes are intersected when using intersect
+//         std::array<ChildHit, 4> traversal; // It can happen that more than 4 nodes are intersected when using intersect
 //         // Pre calculate bounds half, since they are needed for every child
 //         Vector3f b_h = BoundsHalf(b);
 //         // 1st Step: Intersect all child bounding boxes and determine t parameter
 //         for (int i = 0; i < 8; i++) {
 //             Bounds3f child_bounds = DivideBounds(b, i, b_h);
-//             ChildHit child_hit = { i, 0, child_bounds };
+//             ChildHit child_hit = { i, 0 };
 //             float tMax;
 //             // TODO Optimierte Variante implementieren (3 Ebenentests)
+//             if (size >= 4) continue;
 //             if (child_bounds.IntersectP(ray, &child_hit.tMin, &tMax)) traversal[size++] = child_hit; 
 //         }
 //         // 2nd Step: Sort all children by smallest tMin parameter
