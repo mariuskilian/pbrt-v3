@@ -53,9 +53,9 @@ namespace pbrt {
 
 // === HELPERS ===
 
-struct Node { int bitcnt; Bounds3f bounds; };
-struct ChildHit { int idx; Bounds3f bounds; float tMin; };
-struct ChildTraversal{ std::array<ChildHit, 8> nodes; int size; };
+struct Node { int bitcnt; Bounds3f bounds; Float tMin; };
+struct ChildHit { int idx; float tMin; };
+struct ChildTraversal{ std::array<ChildHit, 4> nodes; int size; };
 
 // TODO extract helper functions in octree-basic, then refer to those from here
 // TODO give axisHalf as parameter; Inline
@@ -92,29 +92,58 @@ inline int Rank(std::array<BITFIELD_TYPE, CHUNK_DEPTH> bitfield, int n) {
     return count;
 }
 
-inline ChildTraversal FindTraversalOrder(const Ray &ray, Bounds3f b) {
-        int size = 0;
-        std::array<ChildHit, 8> traversal; // It can happen that more than 4 nodes are intersected when using intersect
-        // Pre calculate bounds half, since they are needed for every child
-        Vector3f b_h = BoundsHalf(b);
-        // 1st Step: Intersect all child bounding boxes and determine t parameter
-        for (int i = 0; i < 8; i++) {
-            Bounds3f child_bounds = DivideBounds(b, i, b_h);
-            ChildHit child_hit = { i, child_bounds };
-            float tMax;
-            // TODO Optimierte Variante implementieren (3 Ebenentests)
-            if (child_bounds.IntersectP(ray, &child_hit.tMin, &tMax)) traversal[size++] = child_hit; 
-        }
-        // 2nd Step: Sort all children by smallest tMin parameter
-        // TODO eigene sortierung (bei 8 elementen ist ein naives insertionsort whr. besser)
-        std::sort(traversal.begin(), traversal.begin() + size,
-            [](const ChildHit &a, const ChildHit &b) {return a.tMin < b.tMin;});
-        return ChildTraversal{traversal, size};
+inline ChildTraversal FindTraversalOrder(const Ray &ray, Bounds3f b, Float tMin) {
+    int size = 1;
+    std::array<ChildHit, 4> traversal;
+    Vector3f b_h = BoundsHalf(b);
+
+    // First child hit
+    int idx = 0;
+    Point3f init_point = ray.o + tMin * ray.d;
+    for (int i = 0; i < 3; i++) if (init_point[i] > b_h[i]) idx |= (1<<i);
+    traversal[0] = ChildHit{ idx, tMin };
+
+    // Cut all bound-half-planes, and if intersection is within bounds, add to list
+    for (int axis = 0; axis < 3; axis++) {
+        Float t = (b_h[axis] - ray.o[axis]) / ray.d[axis];
+        Point3f p = ray.o + t * ray.d;
+        // Discard point if it's outside of the bounds
+        for (int i = 0; i < 3; i++) if (p[i] < b.pMin[i] || p[i] > b.pMax[i]) continue;
+        traversal[size++] = ChildHit{ 1<<axis, t };
+    }
+
+    // Sort list based on smallest tMin
+    std::sort(traversal.begin() + 1, traversal.begin() + size, 
+        [](const ChildHit &c1, const ChildHit &c2) {return c1.tMin < c2.tMin;});
+    
+    // Finally, determine idx for each child hit
+    for (int i = 1; i < size; i++) traversal[i].idx ^= traversal[i-1].idx;
+
+    return ChildTraversal{traversal, size};
 }
+
+// inline ChildTraversal FindTraversalOrder(const Ray &ray, Bounds3f b, Float tMin) {
+//         int size = 0;
+//         std::array<ChildHit, 8> traversal; // It can happen that more than 4 nodes are intersected when using intersect
+//         // Pre calculate bounds half, since they are needed for every child
+//         Vector3f b_h = BoundsHalf(b);
+//         // 1st Step: Intersect all child bounding boxes and determine t parameter
+//         for (int i = 0; i < 8; i++) {
+//             Bounds3f child_bounds = DivideBounds(b, i, b_h);
+//             ChildHit child_hit = { i, 0, child_bounds };
+//             float tMax;
+//             // TODO Optimierte Variante implementieren (3 Ebenentests)
+//             if (child_bounds.IntersectP(ray, &child_hit.tMin, &tMax)) traversal[size++] = child_hit; 
+//         }
+//         // 2nd Step: Sort all children by smallest tMin parameter
+//         // TODO eigene sortierung (bei 8 elementen ist ein naives insertionsort whr. besser)
+//         std::sort(traversal.begin(), traversal.begin() + size,
+//             [](const ChildHit &a, const ChildHit &b) {return a.tMin < b.tMin;});
+//         return ChildTraversal{traversal, size};
+// }
 
 // === OCTREE STRUCT CREATION ==
 OctreeAccel::OctreeAccel(std::vector<std::shared_ptr<Primitive>> p) : primitives(std::move(p)) {
-    printf("Start aufbau\n");
     oba = OctreeBasicAccel(primitives);
     wb = oba.WorldBound();
     
@@ -195,16 +224,17 @@ OctreeAccel::~OctreeAccel() { //FreeAligned(nodes2);
 bool OctreeAccel::Intersect(const Ray &ray, SurfaceInteraction *isect) const {
     ProfilePhase p(Prof::AccelIntersect);
     bool hit = false;
-    if (!wb.IntersectP(ray)) return false;
-    RecurseIntersect(ray, isect, 0, wb, hit);
+    Float tMin, _;
+    if (!wb.IntersectP(ray, &tMin, &_)) return false;
+    RecurseIntersect(ray, isect, 0, wb, tMin, hit);
     return hit;
 }
 
-void OctreeAccel::RecurseIntersect(const Ray &ray, SurfaceInteraction *isect, uint32_t chunk_offset, Bounds3f parent_bounds, bool &hit) const {
+void OctreeAccel::RecurseIntersect(const Ray &ray, SurfaceInteraction *isect, uint32_t chunk_offset, Bounds3f parent_bounds, Float tMin, bool &hit) const {
     Chunk c = octree[chunk_offset];
 
     std::array<Node, 1 + BITFIELD_SIZE * CHUNK_DEPTH> traversal; // Node stack
-    traversal[0] = Node{0, parent_bounds};
+    traversal[0] = Node{0, parent_bounds, tMin};
     int traversal_idx = 0;
 
     // TODO For schleife mit max möglichen knoten besser?
@@ -215,7 +245,8 @@ void OctreeAccel::RecurseIntersect(const Ray &ray, SurfaceInteraction *isect, ui
             // Inner Node ... 
             if (node.bitcnt < NUM_SETS_PER_CHUNK) {
                 // ... with children in same chunk
-                ChildTraversal child_traversal = FindTraversalOrder(ray, node.bounds);
+                ChildTraversal child_traversal = FindTraversalOrder(ray, node.bounds, node.tMin);
+                Vector3f b_h = BoundsHalf(node.bounds);
                 for (int i = child_traversal.size - 1; i >= 0; i--) {
                     // Kindknoten werden dann nicht mehr traversiert, wenn bereits ein näherer Schnitt ermittelt wurde
                     // Dadurch deckt man auch den Fall ab, dass zwar ein Schnitt gefunden wurde, dieser aber außerhalb der Knotens liegt
@@ -223,12 +254,13 @@ void OctreeAccel::RecurseIntersect(const Ray &ray, SurfaceInteraction *isect, ui
 
                     int idx = 8 * node.bitcnt + child_traversal.nodes[i].idx;
                     int bitcnt = Rank(c.nodes, idx) + (IsInnerNode(c.nodes, idx) ? 1 : -(idx + 1));
-                    traversal[++traversal_idx] = Node{bitcnt, child_traversal.nodes[i].bounds};
+                    Bounds3f child_bounds = DivideBounds(node.bounds, child_traversal.nodes[i].idx, b_h);
+                    traversal[++traversal_idx] = Node{bitcnt, child_bounds, child_traversal.nodes[i].tMin};
                 }
             } else {
-                // ... with chilren in different chunk
+                // ... with children in different chunk
                 uint32_t child_chunk = c.child_chunk_offset + node.bitcnt - NUM_SETS_PER_CHUNK;
-                RecurseIntersect(ray, isect, child_chunk, node.bounds, hit);
+                RecurseIntersect(ray, isect, child_chunk, node.bounds, node.tMin, hit);
             }
         } else {
             // Leaf Node

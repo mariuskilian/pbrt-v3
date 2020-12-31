@@ -65,11 +65,10 @@ class OctreeBasicAccel : public Aggregate {
     std::vector<std::shared_ptr<Primitive>> primitives;
     Bounds3f wb; // World Bounds
     
-    Bounds3f octreeDivide(Bounds3f bounds, int idx) const;
     void Recurse(int offset, std::vector<std::shared_ptr<Primitive>> primitives, Bounds3f bounds, int depth);
-    void lh_dump_rec(FILE *f, uint32_t *vcnt_, int offset, Bounds3f bounds);
-    void lh_dump(const char *path);
     void RecurseIntersect(const Ray &ray, SurfaceInteraction *isect, uint32_t offset, Bounds3f bounds, bool &hit) const;
+    void lh_dump(const char *path);
+    void lh_dump_rec(FILE *f, uint32_t *vcnt_, int offset, Bounds3f bounds);
 
     std::vector<uint32_t> nodes, sizes; 
     std::vector<std::shared_ptr<Primitive>> leaves;

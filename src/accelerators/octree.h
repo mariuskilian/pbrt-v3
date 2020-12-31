@@ -88,7 +88,7 @@ class OctreeAccel : public Aggregate {
     std::vector<Chunk> octree;
     
     void Recurse(uint32_t root_node_offset, int chunk_idx); 
-    void RecurseIntersect(const Ray &ray, SurfaceInteraction *isect, uint32_t chunk_offset, Bounds3f parent_bounds, bool &hit) const;
+    void RecurseIntersect(const Ray &ray, SurfaceInteraction *isect, uint32_t chunk_offset, Bounds3f parent_bounds, Float tMin, bool &hit) const;
     void lh_dump(const char *path);
     void lh_dump_rec(FILE *f, uint32_t *vcnt_, uint32_t chunk_offset, Bounds3f bounds);
     void lh_dump_dfs(const char *path);

@@ -44,18 +44,47 @@ namespace pbrt {
 const int MAX_DEPTH = 15; //15
 const int MAX_PRIMS = 32; //30
 
-Bounds3f OctreeBasicAccel::octreeDivide(Bounds3f b, int idx) const {
+// === HELPERS ===
+
+struct ChildHit { int idx; float tMin; };
+struct ChildTraversal { std::array<ChildHit, 8> nodes; int size; };
+
+inline Vector3f BoundsHalf(Bounds3f b) {
+    Vector3f h;
+    for (int i = 0; i < 3; i++) h[i] = (b.pMin[i] + b.pMax[i]) / 2;
+    return h;
+}
+
+inline Bounds3f DivideBounds(Bounds3f b, int idx, Vector3f b_half) {
     for (int i = 0; i < 3; i++) {
-        Float axisHalf = (b.pMin[i] + b.pMax[i]) / 2;
-        if ((idx & (1<<i)) == 0) b.pMax[i] = axisHalf;
-        else b.pMin[i] = axisHalf;
+        if ((idx & (1<<i)) == 0) b.pMax[i] = b_half[i];
+        else b.pMin[i] = b_half[i];
     }
     return b;
 }
 
-OctreeBasicAccel::OctreeBasicAccel(){}
+inline ChildTraversal FindTraversalOrder(const Ray &ray, Bounds3f b) {
+        int size = 0;
+        std::array<ChildHit, 8> traversal; // It can happen that more than 4 nodes are intersected when using intersect
+        // Pre calculate bounds half, since they are needed for every child
+        Vector3f b_h = BoundsHalf(b);
+        // 1st Step: Intersect all child bounding boxes and determine t parameter
+        for (int i = 0; i < 8; i++) {
+            Bounds3f child_bounds = DivideBounds(b, i, b_h);
+            ChildHit child_hit = { i };
+            float tMax;
+            // TODO Optimierte Variante implementieren (3 Ebenentests)
+            if (child_bounds.IntersectP(ray, &child_hit.tMin, &tMax)) traversal[size++] = child_hit; 
+        }
+        // 2nd Step: Sort all children by smallest tMin parameter
+        // TODO eigene sortierung (bei 8 elementen ist ein naives insertionsort whr. besser)
+        std::sort(traversal.begin(), traversal.begin() + size,
+            [](const ChildHit &a, const ChildHit &b) {return a.tMin < b.tMin;});
+        return ChildTraversal{traversal, size};
+}
 
-// KdTreeAccel Method Definitions
+// === OCTREE STRUCTURE CREATION ===
+
 OctreeBasicAccel::OctreeBasicAccel(std::vector<std::shared_ptr<Primitive>> p) : primitives(std::move(p)) {
     // Hier hast du die Bounding Box falsch initialisiert. Sonst ist immer der Ursprung enthalten.
     for (int i = 0; i < 3; i++) { wb.pMin[i] = FLT_MAX; wb.pMax[i] = -FLT_MAX; };
@@ -89,55 +118,7 @@ OctreeBasicAccel::OctreeBasicAccel(std::vector<std::shared_ptr<Primitive>> p) : 
     // lh_dump("visualize_basic.obj");
 }
 
-struct ChildHit { uint32_t idx; float tMin; };
-
-// TODO Rekursion in Schleife umwandeln (schneller)
-void OctreeBasicAccel::RecurseIntersect(const Ray &ray, SurfaceInteraction *isect, uint32_t offset, Bounds3f bounds, bool &hit) const {
-    if ((nodes[offset] & 1) == 0) {
-        // Innerer Knoten
-        uint32_t traversal_size = 0;
-        // Besser anstatt std::vector zu nehmen, da man sich die Speicherallokation spart (sehr teuer)
-        std::array<ChildHit, 8> traversal; // It can happen that more than 4 nodes are intersected when using intersectP
-        // 1. Schritt: Alle Kind Bounding Boxen Schneiden und t Parameter bestimmen
-        for (uint32_t i = 0; i < 8; i++) {
-            Bounds3f child_bounds = octreeDivide(bounds, i);
-            ChildHit childHit = {i};
-            float tMax;
-            // TODO Optimierte Variante implementieren (3 Ebenentests)
-            if (child_bounds.IntersectP(ray, &childHit.tMin, &tMax)) {
-                //if (traversal_size == 8) abort(); // sanity check
-                traversal[traversal_size++] = childHit; 
-            }
-        }
-        // 2. Schritt: Sortierung der Kinder nach t Parameter
-        // TODO eigene sortierung (bei 8 elementen ist ein naives insertionsort whr. besser)
-        std::sort(traversal.begin(), traversal.begin() + traversal_size, [](const ChildHit &a, const ChildHit &b) {return a.tMin < b.tMin;});
-        // 3. Schritt: Traversierung der Kindknoten in sortierter Reihenfolge
-        for (uint32_t i = 0; i < 8; i++) {
-            // Kindknoten werden dann nicht mehr traversiert, wenn bereits ein näherer Schnitt ermittelt wurde
-            // Dadurch deckt man auch den Fall ab, dass zwar ein Schnitt gefunden wurde, dieser aber außerhalb der Knotens liegt
-            if (i < traversal_size && traversal[i].tMin <= ray.tMax) {
-                uint32_t child_offset = (nodes[offset] >> 1) + traversal[i].idx;
-                RecurseIntersect(ray, isect, child_offset, octreeDivide(bounds, traversal[i].idx), hit);
-            }
-        }
-    } else {
-        // Leaf Knoten
-        uint32_t prim_start = nodes[offset] >> 1;
-        uint32_t prim_end = prim_start + sizes[offset];
-        for (uint32_t i = prim_start; i < prim_end; i++)
-            // TODO LRU-Cache/Mailboxing, damit man nicht mehrmals dasselbe primitiv testen muss
-            if (leaves[i].get()->Intersect(ray, isect)) hit = true;
-    }
-}
-
-bool OctreeBasicAccel::Intersect(const Ray &ray, SurfaceInteraction *isect) const {
-    ProfilePhase p(Prof::AccelIntersect);
-    bool hit = false;
-    if (!wb.IntersectP(ray)) return false;
-    RecurseIntersect(ray, isect, 0, wb, hit);
-    return hit;
-}
+OctreeBasicAccel::OctreeBasicAccel(){}
 
 void OctreeBasicAccel::Recurse(int offset, std::vector<std::shared_ptr<Primitive>> primitives, Bounds3f bounds, int depth) {        
 
@@ -164,7 +145,8 @@ void OctreeBasicAccel::Recurse(int offset, std::vector<std::shared_ptr<Primitive
         sizes.insert(sizes.end(), sizes_children.begin(), sizes_children.end());
 
         nodes[offset] = offset_children << 1 | 0;
-        for (uint32_t i = 0; i < 8; i++) Recurse(offset_children + i, prims, octreeDivide(bounds, i), depth + 1);
+        Vector3f b_h = BoundsHalf(bounds);
+        for (uint32_t i = 0; i < 8; i++) Recurse(offset_children + i, prims, DivideBounds(bounds, i, b_h), depth + 1);
     } else { // Leaf node
         uint32_t offset_leaves = leaves.size();
 
@@ -175,12 +157,6 @@ void OctreeBasicAccel::Recurse(int offset, std::vector<std::shared_ptr<Primitive
     }
 }
 
-bool OctreeBasicAccel::IntersectP(const Ray &ray) const {
-    ProfilePhase p(Prof::AccelIntersectP);
-    SurfaceInteraction isect;
-    return Intersect(ray, &isect);
-}
-
 std::shared_ptr<OctreeBasicAccel> CreateOctreeBasicAccelerator(std::vector<std::shared_ptr<Primitive>> prims, const ParamSet &ps) {
     return std::make_shared<OctreeBasicAccel>(std::move(prims));
 }
@@ -188,9 +164,58 @@ std::shared_ptr<OctreeBasicAccel> CreateOctreeBasicAccelerator(std::vector<std::
 OctreeBasicAccel::~OctreeBasicAccel() { //FreeAligned(nodes2);
 }
 
+// === OCTREE RAY TRAVERSAL ===
+
+// TODO Rekursion in Schleife umwandeln (schneller)
+bool OctreeBasicAccel::Intersect(const Ray &ray, SurfaceInteraction *isect) const {
+    ProfilePhase p(Prof::AccelIntersect);
+    bool hit = false;
+    if (!wb.IntersectP(ray)) return false;
+    RecurseIntersect(ray, isect, 0, wb, hit);
+    return hit;
+}
+
+void OctreeBasicAccel::RecurseIntersect(const Ray &ray, SurfaceInteraction *isect, uint32_t offset, Bounds3f bounds, bool &hit) const {
+    if ((nodes[offset] & 1) == 0) {
+        // Innerer Knoten
+        ChildTraversal traversal = FindTraversalOrder(ray, bounds);
+        // 3. Schritt: Traversierung der Kindknoten in sortierter Reihenfolge
+        Vector3f b_h = BoundsHalf(bounds);
+        for (uint32_t i = 0; i < traversal.size; i++) {
+            // Kindknoten werden dann nicht mehr traversiert, wenn bereits ein näherer Schnitt ermittelt wurde
+            // Dadurch deckt man auch den Fall ab, dass zwar ein Schnitt gefunden wurde, dieser aber außerhalb der Knotens liegt
+            if (traversal.nodes[i].tMin <= ray.tMax) {
+                uint32_t child_offset = (nodes[offset] >> 1) + traversal.nodes[i].idx;
+                Bounds3f child_bounds = DivideBounds(bounds, traversal.nodes[i].idx, b_h);
+                RecurseIntersect(ray, isect, child_offset, child_bounds, hit);
+            }
+        }
+    } else {
+        // Leaf Knoten
+        uint32_t prim_start = nodes[offset] >> 1;
+        uint32_t prim_end = prim_start + sizes[offset];
+        for (uint32_t i = prim_start; i < prim_end; i++)
+            // TODO LRU-Cache/Mailboxing, damit man nicht mehrmals dasselbe primitiv testen muss
+            if (leaves[i].get()->Intersect(ray, isect)) hit = true;
+    }
+}
+
+bool OctreeBasicAccel::IntersectP(const Ray &ray) const {
+    ProfilePhase p(Prof::AccelIntersectP);
+    SurfaceInteraction isect;
+    return Intersect(ray, &isect);
+}
+
 // === VISUALIZATION ===
 
 // Code to visualize octree
+void OctreeBasicAccel::lh_dump(const char *path) {
+    FILE *f = fopen(path, "wb");
+    uint32_t vcnt = 1;
+    lh_dump_rec(f, &vcnt, 0, WorldBound());
+    fclose(f);
+}
+
 void OctreeBasicAccel::lh_dump_rec(FILE *f, uint32_t *vcnt_, int offset, Bounds3f bounds) {
 
     // Vertices ausgeben
@@ -214,17 +239,11 @@ void OctreeBasicAccel::lh_dump_rec(FILE *f, uint32_t *vcnt_, int offset, Bounds3
 
     // Rekursion
     if ((nodes[offset] & 1) == 0) { // Inner node
+        Vector3f b_h = BoundsHalf(bounds);
         for (uint32_t i = 0; i < 8; i++) {
-            lh_dump_rec(f, vcnt_, (nodes[offset] >> 1) + i, octreeDivide(bounds, i));
+            lh_dump_rec(f, vcnt_, (nodes[offset] >> 1) + i, DivideBounds(bounds, i, b_h));
         }
     }
-}
-
-void OctreeBasicAccel::lh_dump(const char *path) {
-    FILE *f = fopen(path, "wb");
-    uint32_t vcnt = 1;
-    lh_dump_rec(f, &vcnt, 0, WorldBound());
-    fclose(f);
 }
 
 }  // namespace pbrt
