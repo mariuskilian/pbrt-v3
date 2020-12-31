@@ -181,7 +181,7 @@ void OctreeBasicAccel::RecurseIntersect(const Ray &ray, SurfaceInteraction *isec
         ChildTraversal traversal = FindTraversalOrder(ray, bounds);
         // 3. Schritt: Traversierung der Kindknoten in sortierter Reihenfolge
         Vector3f b_h = BoundsHalf(bounds);
-        for (uint32_t i = 0; i < traversal.size; i++) {
+        for (int i = 0; i < traversal.size; i++) {
             // Kindknoten werden dann nicht mehr traversiert, wenn bereits ein näherer Schnitt ermittelt wurde
             // Dadurch deckt man auch den Fall ab, dass zwar ein Schnitt gefunden wurde, dieser aber außerhalb der Knotens liegt
             if (traversal.nodes[i].tMin <= ray.tMax) {

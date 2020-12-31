@@ -57,15 +57,16 @@ struct Node { int bitcnt; Bounds3f bounds; Float tMin; };
 struct ChildHit { int idx; float tMin; };
 struct ChildTraversal{ std::array<ChildHit, 4> nodes; int size; };
 
+
 // TODO extract helper functions in octree-basic, then refer to those from here
 // TODO give axisHalf as parameter; Inline
-inline Vector3f BoundsHalf(Bounds3f b) {
+Vector3f BoundsHalf(Bounds3f b) {
     Vector3f h;
     for (int i = 0; i < 3; i++) h[i] = (b.pMin[i] + b.pMax[i]) / 2;
     return h;
 }
 
-inline Bounds3f DivideBounds(Bounds3f b, int idx, Vector3f b_half) {
+Bounds3f DivideBounds(Bounds3f b, int idx, Vector3f b_half) {
     for (int i = 0; i < 3; i++) {
         if ((idx & (1<<i)) == 0) b.pMax[i] = b_half[i];
         else b.pMin[i] = b_half[i];
@@ -73,13 +74,13 @@ inline Bounds3f DivideBounds(Bounds3f b, int idx, Vector3f b_half) {
     return b;
 }
 
-inline bool IsInnerNode(std::array<BITFIELD_TYPE, CHUNK_DEPTH> bitfield, int n) {
+bool IsInnerNode(std::array<BITFIELD_TYPE, CHUNK_DEPTH> bitfield, int n) {
     int i = n / BITFIELD_SIZE;
     int offset = n % BITFIELD_SIZE;
     return ((bitfield[i] >> offset) & 1) == 1;
 }
 
-inline int Rank(std::array<BITFIELD_TYPE, CHUNK_DEPTH> bitfield, int n) {
+int Rank(std::array<BITFIELD_TYPE, CHUNK_DEPTH> bitfield, int n) {
     int count = 0;
     BITFIELD_TYPE bits;
     for (int i = 0; i < CHUNK_DEPTH; i++) {
@@ -92,7 +93,7 @@ inline int Rank(std::array<BITFIELD_TYPE, CHUNK_DEPTH> bitfield, int n) {
     return count;
 }
 
-inline ChildTraversal FindTraversalOrder(const Ray &ray, Bounds3f b, Float tMin) {
+ChildTraversal FindTraversalOrder(const Ray &ray, Bounds3f b, Float tMin) {
     int size = 1;
     std::array<ChildHit, 4> traversal;
     Vector3f b_h = BoundsHalf(b);
