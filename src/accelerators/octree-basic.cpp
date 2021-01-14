@@ -37,25 +37,26 @@
 #include "interaction.h"
 #include "stats.h"
 #include <algorithm>
-#include <array>
+
+#if defined(_MSC_VER)
+    #include "intrin.h"
+    #define POPCNT __popcnt64
+#elif defined(__clang__)
+    #include "popcntintrin.h"
+    #define POPCNT _mm_popcnt_u64
+#endif
 
 namespace pbrt {
 
-const int MAX_DEPTH = 15; //15
-const int MAX_PRIMS = 32; //30
-
 // === HELPERS ===
 
-struct ChildHit { int idx; float tMin; };
-struct ChildTraversal { std::array<ChildHit, 8> nodes; int size; };
-
-inline Vector3f BoundsHalf(Bounds3f b) {
+Vector3f BoundsHalf(Bounds3f b) {
     Vector3f h;
     for (int i = 0; i < 3; i++) h[i] = (b.pMin[i] + b.pMax[i]) / 2;
     return h;
 }
 
-inline Bounds3f DivideBounds(Bounds3f b, int idx, Vector3f b_half) {
+Bounds3f DivideBounds(Bounds3f b, int idx, Vector3f b_half) {
     for (int i = 0; i < 3; i++) {
         if ((idx & (1<<i)) == 0) b.pMax[i] = b_half[i];
         else b.pMin[i] = b_half[i];
@@ -63,31 +64,100 @@ inline Bounds3f DivideBounds(Bounds3f b, int idx, Vector3f b_half) {
     return b;
 }
 
-inline ChildTraversal FindTraversalOrder(const Ray &ray, Bounds3f b) {
-        int size = 0;
-        std::array<ChildHit, 8> traversal; // It can happen that more than 4 nodes are intersected when using intersect
-        // Pre calculate bounds half, since they are needed for every child
-        Vector3f b_h = BoundsHalf(b);
-        // 1st Step: Intersect all child bounding boxes and determine t parameter
-        for (int i = 0; i < 8; i++) {
-            Bounds3f child_bounds = DivideBounds(b, i, b_h);
-            ChildHit child_hit = { i };
-            float tMax;
-            // TODO Optimierte Variante implementieren (3 Ebenentests)
-            if (child_bounds.IntersectP(ray, &child_hit.tMin, &tMax)) traversal[size++] = child_hit; 
+ChildTraversal FindTraversalOrder(const Ray &ray, Bounds3f b, Float tMin) {
+    int size = 1;
+    std::array<ChildHit, 4> traversal;
+    Vector3f b_h = BoundsHalf(b);
+    // First child hit
+    int idx = 0;
+    Point3f init_point = ray.o + tMin * ray.d;
+    for (int i = 0; i < 3; i++) if (init_point[i] > b_h[i]) idx |= (1<<i);
+    traversal[0] = ChildHit{ idx, tMin };
+    // Cut all bound-half-planes, and if intersection is within bounds, add to list
+    for (int axis = 0; axis < 3; axis++) {
+        if (ray.d[axis] == 0) continue;
+        Float t = (b_h[axis] - ray.o[axis]) / ray.d[axis];
+        if (t < tMin) continue;
+        Point3f p = ray.o + t * ray.d;
+        bool inside = true;
+        for (int i = 0; i < 3; i++) if (p[i] < b.pMin[i] || p[i] > b.pMax[i]) { inside = false; break; }
+        if (!inside) continue;
+        // Add point to traversal array. It's index is currently only the to-be-flipped axis
+        traversal[size++] = ChildHit{ 1<<axis, t };
+    }
+    // Sort list based on smallest tMin
+    std::sort(traversal.begin() + 1, traversal.begin() + size, 
+        [](const ChildHit &c1, const ChildHit &c2) {return c1.tMin < c2.tMin;});
+    // Finally, determine idx for each child hit
+    for (int i = 1; i < size; i++) traversal[i].idx ^= traversal[i-1].idx;
+    return ChildTraversal{traversal, size};
+}
+
+int Rank(BITFIELD_TYPE bits, int n) {
+    if (n == BITFIELD_SIZE) return POPCNT(bits);
+    return POPCNT(bits & ((ONE << n) - ONE));
+}
+
+bool BoundsContainPrim(Bounds3f b, std::shared_ptr<Primitive> p) {
+    Bounds3f b_p = p->WorldBound();
+    for (int i = 0; i < 3; i++)
+        if (b_p.pMax[i] < b.pMin[i] || b.pMax[i] < b_p.pMin[i])
+            return false;
+    return true;
+}
+
+bool MakeLeafNode(Bounds3f b, std::vector<std::shared_ptr<Primitive>> prims) {
+    // Check how many children contain at least 80% of the parents prims,
+    // we call these 'cluster children'
+    Vector3f b_h = BoundsHalf(b);
+    std::vector<int> cluster_children;
+    for (int idx = 0; idx < 8; idx++) {
+        Bounds3f b_child = DivideBounds(b, idx, b_h);
+        int num_prims = 0;
+        for (int p = 0; p < prims.size(); p++)
+            if (BoundsContainPrim(b_child, prims[p])) num_prims++;
+        if (num_prims >= PRM_THRESH * prims.size()) cluster_children.push_back(idx);
+    }
+    if (cluster_children.size() < 2) return false;
+    // Since there's at least 2 children with >80% of the parents prims, make a list
+    // of the prims that are in ALL of these 'cluster children'. This is the primitive cluster
+    std::vector<std::shared_ptr<Primitive>> cluster_prims;
+    for (int p = 0; p < prims.size(); p++) {
+        bool prim_in_all_cluster_children = true;
+        for (int idx = 0; idx < cluster_children.size(); idx++) {
+            Bounds3f b_child = DivideBounds(b, cluster_children[idx], b_h);
+            if (!BoundsContainPrim(b_child, prims[p])) {
+                prim_in_all_cluster_children = false;
+                break;
+            }
         }
-        // 2nd Step: Sort all children by smallest tMin parameter
-        // TODO eigene sortierung (bei 8 elementen ist ein naives insertionsort whr. besser)
-        std::sort(traversal.begin(), traversal.begin() + size,
-            [](const ChildHit &a, const ChildHit &b) {return a.tMin < b.tMin;});
-        return ChildTraversal{traversal, size};
+        if (prim_in_all_cluster_children) cluster_prims.push_back(prims[p]);
+    }
+    // Now create bounds surrounding this cluster of primitives
+    Bounds3f b_cluster;
+    for (int i = 0; i < 3; i++) { b_cluster.pMin[i] = FLT_MAX; b_cluster.pMax[i] = -FLT_MAX; }
+    for (int i = 0; i < cluster_prims.size(); i++) {
+        Bounds3f b = cluster_prims[i]->WorldBound();
+        for (int i = 0; i < 3; i++) {
+            if (b.pMin[i] < b_cluster.pMin[i]) b_cluster.pMin[i] = b.pMin[i];
+            if (b.pMax[i] > b_cluster.pMax[i]) b_cluster.pMax[i] = b.pMax[i];
+        }
+    }
+    // Limit the cluster bounds to the current node's bounds
+    for (int i = 0; i < 3; i++) {
+        b_cluster.pMin[i] = (b_cluster.pMin[i] < b.pMin[i]) ? b.pMin[i] : b_cluster.pMin[i];
+        b_cluster.pMax[i] = (b_cluster.pMax[i] > b.pMax[i]) ? b.pMax[i] : b_cluster.pMax[i];
+    }
+    // Now check the bounds of this cluster of prims, and if it takes up at least 80% of
+    // the current bounds space, mark it as a leaf node
+    return (b_cluster.Volume() >= VOL_THRESH * b.Volume());
 }
 
 // === OCTREE STRUCTURE CREATION ===
 
 OctreeBasicAccel::OctreeBasicAccel(std::vector<std::shared_ptr<Primitive>> p) : primitives(std::move(p)) {
     // Hier hast du die Bounding Box falsch initialisiert. Sonst ist immer der Ursprung enthalten.
-    for (int i = 0; i < 3; i++) { wb.pMin[i] = FLT_MAX; wb.pMax[i] = -FLT_MAX; };
+    for (int i = 0; i < 3; i++) { wb.pMin[i] = FLT_MAX; wb.pMax[i] = -FLT_MAX; }
 
     // Determine world bounds
     for (int i = 0; i < primitives.size(); i++) {
@@ -114,8 +184,12 @@ OctreeBasicAccel::OctreeBasicAccel(std::vector<std::shared_ptr<Primitive>> p) : 
     
     nodes.push_back(0);
     sizes.push_back(0);
+    printf("Octree: Starting creation!\n");
     Recurse(0, primitives, wb, 0);
+    printf("Octree: Creation done!\n");
+    // printf("Starting visualization\n");
     // lh_dump("visualize_basic.obj");
+    // printf("Visualization done!\n");
 }
 
 OctreeBasicAccel::OctreeBasicAccel(){}
@@ -126,17 +200,10 @@ void OctreeBasicAccel::Recurse(int offset, std::vector<std::shared_ptr<Primitive
     std::vector<std::shared_ptr<Primitive>> prims;
     for (int i = 0; i < primitives.size(); i++) {
         std::shared_ptr<Primitive> p = primitives.at(i);
-        Bounds3f primBounds = p->WorldBound();
-        bool bounds_overlap = true;
-        for (int i = 0; i < 3; i++)
-            if (primBounds.pMax[i] < bounds.pMin[i] || bounds.pMax[i] < primBounds.pMin[i]) {
-                bounds_overlap = false;
-                break;
-            }
-        if (bounds_overlap) prims.push_back(p);
+        if (BoundsContainPrim(bounds, p)) prims.push_back(p);
     }
 
-    if (prims.size() > MAX_PRIMS && depth < MAX_DEPTH) { // Inner node
+    if (prims.size() > MAX_PRIMS && !MakeLeafNode(bounds, prims)) { // Inner node
         uint32_t offset_children = nodes.size();
 
         std::vector<uint32_t> nodes_children = {0, 0, 0, 0, 0, 0, 0, 0};
@@ -170,15 +237,16 @@ OctreeBasicAccel::~OctreeBasicAccel() { //FreeAligned(nodes2);
 bool OctreeBasicAccel::Intersect(const Ray &ray, SurfaceInteraction *isect) const {
     ProfilePhase p(Prof::AccelIntersect);
     bool hit = false;
-    if (!wb.IntersectP(ray)) return false;
-    RecurseIntersect(ray, isect, 0, wb, hit);
+    Float tMin, _;
+    if (!wb.IntersectP(ray, &tMin, &_)) return false;
+    RecurseIntersect(ray, isect, 0, wb, tMin, hit);
     return hit;
 }
 
-void OctreeBasicAccel::RecurseIntersect(const Ray &ray, SurfaceInteraction *isect, uint32_t offset, Bounds3f bounds, bool &hit) const {
+void OctreeBasicAccel::RecurseIntersect(const Ray &ray, SurfaceInteraction *isect, uint32_t offset, Bounds3f bounds, Float tMin, bool &hit) const {
     if ((nodes[offset] & 1) == 0) {
         // Innerer Knoten
-        ChildTraversal traversal = FindTraversalOrder(ray, bounds);
+        ChildTraversal traversal = FindTraversalOrder(ray, bounds, tMin);
         // 3. Schritt: Traversierung der Kindknoten in sortierter Reihenfolge
         Vector3f b_h = BoundsHalf(bounds);
         for (int i = 0; i < traversal.size; i++) {
@@ -187,7 +255,7 @@ void OctreeBasicAccel::RecurseIntersect(const Ray &ray, SurfaceInteraction *isec
             if (traversal.nodes[i].tMin <= ray.tMax) {
                 uint32_t child_offset = (nodes[offset] >> 1) + traversal.nodes[i].idx;
                 Bounds3f child_bounds = DivideBounds(bounds, traversal.nodes[i].idx, b_h);
-                RecurseIntersect(ray, isect, child_offset, child_bounds, hit);
+                RecurseIntersect(ray, isect, child_offset, child_bounds, traversal.nodes[i].tMin, hit);
             }
         }
     } else {

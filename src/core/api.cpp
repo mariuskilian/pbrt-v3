@@ -44,7 +44,8 @@
 #include "accelerators/bvh.h"
 #include "accelerators/kdtreeaccel.h"
 #include "accelerators/octree-basic.h"
-#include "accelerators/octree.h"
+#include "accelerators/octree-chunk-bfs.h"
+#include "accelerators/octree-chunk-dfs.h"
 #include "cameras/environment.h"
 #include "cameras/orthographic.h"
 #include "cameras/perspective.h"
@@ -780,8 +781,10 @@ std::shared_ptr<Primitive> MakeAccelerator(
         accel = CreateKdTreeAccelerator(std::move(prims), paramSet);
     else if (name == "octree-basic")
         accel = CreateOctreeBasicAccelerator(std::move(prims), paramSet);
-    else if (name == "octree")
-        accel = CreateOctreeAccelerator(std::move(prims), paramSet);
+    else if (name == "octree-chunk-bfs")
+        accel = CreateOcChunkBFSAccelerator(std::move(prims), paramSet);
+    else if (name == "octree-chunk-dfs")
+        accel = CreateOcChunkDFSAccelerator(std::move(prims), paramSet);
     else
         Warning("Accelerator \"%s\" unknown.", name.c_str());
     paramSet.ReportUnused();

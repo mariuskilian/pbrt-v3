@@ -32,8 +32,7 @@
 
 
 // accelerators/kdtreeaccel.cpp*
-#include "accelerators/octree.h"
-#include "accelerators/octree-basic.h"
+#include "accelerators/octree-chunk-bfs.h"
 #include "paramset.h"
 #include "interaction.h"
 #include "stats.h"
@@ -41,108 +40,34 @@
 #include <array>
 #include <queue>
 
-#if defined(_MSC_VER)
-    #include "intrin.h"
-    #define POPCNT __popcnt64
-#elif defined(__clang__)
-    #include "popcntintrin.h"
-    #define POPCNT _mm_popcnt_u64
-#endif
-
 namespace pbrt {
 
 // === HELPERS ===
 
-struct Node { int bitcnt; Bounds3f bounds; Float tMin; };
-struct ChildHit { int idx; float tMin; };
-struct ChildTraversal{ std::array<ChildHit, 4> nodes; int size; };
-
-
-// TODO extract helper functions in octree-basic, then refer to those from here
-// TODO give axisHalf as parameter; Inline
-Vector3f BoundsHalf(Bounds3f b) {
-    Vector3f h;
-    for (int i = 0; i < 3; i++) h[i] = (b.pMin[i] + b.pMax[i]) / 2;
-    return h;
-}
-
-Bounds3f DivideBounds(Bounds3f b, int idx, Vector3f b_half) {
-    for (int i = 0; i < 3; i++) {
-        if ((idx & (1<<i)) == 0) b.pMax[i] = b_half[i];
-        else b.pMin[i] = b_half[i];
+int BitfieldRankOffset(std::array<BITFIELD_TYPE, BFS_CHUNK_DEPTH> bitfield, int n) {
+    int count = 0;
+    BITFIELD_TYPE bits;
+    for (int i = 0; i < BFS_CHUNK_DEPTH; i++) {
+        if ((n -= BITFIELD_SIZE) < 0) break;
+        count += Rank(bitfield[i]);
     }
-    return b;
+    return count;
 }
 
-bool IsInnerNode(std::array<BITFIELD_TYPE, CHUNK_DEPTH> bitfield, int n) {
+int BitfieldRankUnique(std::array<BITFIELD_TYPE, BFS_CHUNK_DEPTH> bitfield, int n) {
+    int idx = n / BITFIELD_SIZE;
+    int pos = n % BITFIELD_SIZE;
+    return Rank(bitfield[idx], pos);
+}
+
+bool IsInnerNode(std::array<BITFIELD_TYPE, BFS_CHUNK_DEPTH> bitfield, int n) {
     int i = n / BITFIELD_SIZE;
     int offset = n % BITFIELD_SIZE;
     return ((bitfield[i] >> offset) & 1) == 1;
 }
 
-int Rank(std::array<BITFIELD_TYPE, CHUNK_DEPTH> bitfield, int n) {
-    int count = 0;
-    BITFIELD_TYPE bits;
-    for (int i = 0; i < CHUNK_DEPTH; i++) {
-        bits = bitfield[i];
-        if (n < BITFIELD_SIZE) break;
-        count += POPCNT(bits);
-        n -= BITFIELD_SIZE;
-    }
-    count += POPCNT(bits & ((ONE << n) - ONE));
-    return count;
-}
-
-ChildTraversal FindTraversalOrder(const Ray &ray, Bounds3f b, Float tMin) {
-    int size = 1;
-    std::array<ChildHit, 4> traversal;
-    Vector3f b_h = BoundsHalf(b);
-    // First child hit
-    int idx = 0;
-    Point3f init_point = ray.o + tMin * ray.d;
-    for (int i = 0; i < 3; i++) if (init_point[i] > b_h[i]) idx |= (1<<i);
-    traversal[0] = ChildHit{ idx, tMin };
-    // Cut all bound-half-planes, and if intersection is within bounds, add to list
-    for (int axis = 0; axis < 3; axis++) {
-        if (ray.d[axis] == 0) continue;
-        Float t = (b_h[axis] - ray.o[axis]) / ray.d[axis];
-        if (t < tMin || t > ray.tMax) continue;
-        Point3f p = ray.o + t * ray.d;
-        for (int i = 0; i < 3; i++) if (p[i] < b.pMin[i] || p[i] > b.pMax[i]) continue;
-        // Add point to traversal array. It's index is currently only the to-be-flipped axis
-        traversal[size++] = ChildHit{ 1<<axis, t };
-    }
-    // Sort list based on smallest tMin
-    std::sort(traversal.begin() + 1, traversal.begin() + size, 
-        [](const ChildHit &c1, const ChildHit &c2) {return c1.tMin < c2.tMin;});
-    // Finally, determine idx for each child hit
-    for (int i = 1; i < size; i++) traversal[i].idx ^= traversal[i-1].idx;
-    return ChildTraversal{traversal, size};
-}
-
-// ChildTraversal FindTraversalOrder(const Ray &ray, Bounds3f b, Float tMin) {
-//         int size = 0;
-//         std::array<ChildHit, 4> traversal; // It can happen that more than 4 nodes are intersected when using intersect
-//         // Pre calculate bounds half, since they are needed for every child
-//         Vector3f b_h = BoundsHalf(b);
-//         // 1st Step: Intersect all child bounding boxes and determine t parameter
-//         for (int i = 0; i < 8; i++) {
-//             Bounds3f child_bounds = DivideBounds(b, i, b_h);
-//             ChildHit child_hit = { i, 0 };
-//             float tMax;
-//             // TODO Optimierte Variante implementieren (3 Ebenentests)
-//             if (size >= 4) continue;
-//             if (child_bounds.IntersectP(ray, &child_hit.tMin, &tMax)) traversal[size++] = child_hit; 
-//         }
-//         // 2nd Step: Sort all children by smallest tMin parameter
-//         // TODO eigene sortierung (bei 8 elementen ist ein naives insertionsort whr. besser)
-//         std::sort(traversal.begin(), traversal.begin() + size,
-//             [](const ChildHit &a, const ChildHit &b) {return a.tMin < b.tMin;});
-//         return ChildTraversal{traversal, size};
-// }
-
 // === OCTREE STRUCT CREATION ==
-OctreeAccel::OctreeAccel(std::vector<std::shared_ptr<Primitive>> p) : primitives(std::move(p)) {
+OcChunkBFSAccel::OcChunkBFSAccel(std::vector<std::shared_ptr<Primitive>> p) : primitives(std::move(p)) {
     oba = OctreeBasicAccel(primitives);
     wb = oba.WorldBound();
     
@@ -151,11 +76,11 @@ OctreeAccel::OctreeAccel(std::vector<std::shared_ptr<Primitive>> p) : primitives
         sizes.push_back(0);
         Recurse(0, 0);
     }
-    lh_dump("visualize_bfs.obj");
-    lh_dump_dfs("visualize_dfs.obj");
+    //lh_dump("visualize_bfs.obj");
+    //lh_dump_dfs("visualize_dfs.obj");
 }
 
-void OctreeAccel::Recurse(uint32_t root_node_offset, int chunk_idx) {
+void OcChunkBFSAccel::Recurse(uint32_t root_node_offset, int chunk_idx) {
     octree[chunk_idx].child_chunk_offset = octree.size();
     octree[chunk_idx].sizes_offset = sizes.size();
 
@@ -181,7 +106,7 @@ void OctreeAccel::Recurse(uint32_t root_node_offset, int chunk_idx) {
         // If it's an inner node, properly reserve its children (new chunk or in current chunk)
         if (is_inner_node) {
             // Inner node
-            if (chunk_fill_size == NUM_SETS_PER_CHUNK) {
+            if (chunk_fill_size == BFS_NUM_SETS_PER_CHUNK) {
                 // Chunk is full, need to make new chunk
                 chunk_ptr_nodes.push_back(node_offset);
                 octree.push_back(Chunk{}); // reserve chunk slot
@@ -210,17 +135,17 @@ void OctreeAccel::Recurse(uint32_t root_node_offset, int chunk_idx) {
 
 }
 
-std::shared_ptr<OctreeAccel> CreateOctreeAccelerator(std::vector<std::shared_ptr<Primitive>> prims, const ParamSet &ps) {
-    return std::make_shared<OctreeAccel>(std::move(prims));
+std::shared_ptr<OcChunkBFSAccel> CreateOcChunkBFSAccelerator(std::vector<std::shared_ptr<Primitive>> prims, const ParamSet &ps) {
+    return std::make_shared<OcChunkBFSAccel>(std::move(prims));
 }
 
-OctreeAccel::~OctreeAccel() { //FreeAligned(nodes2);
+OcChunkBFSAccel::~OcChunkBFSAccel() { //FreeAligned(nodes2);
 }
 
 // === OCTREE RAY TRAVERSAL ===
 
 // TODO Rekursion in Schleife umwandeln (schneller)
-bool OctreeAccel::Intersect(const Ray &ray, SurfaceInteraction *isect) const {
+bool OcChunkBFSAccel::Intersect(const Ray &ray, SurfaceInteraction *isect) const {
     ProfilePhase p(Prof::AccelIntersect);
     bool hit = false;
     Float tMin, _;
@@ -229,10 +154,10 @@ bool OctreeAccel::Intersect(const Ray &ray, SurfaceInteraction *isect) const {
     return hit;
 }
 
-void OctreeAccel::RecurseIntersect(const Ray &ray, SurfaceInteraction *isect, uint32_t chunk_offset, Bounds3f parent_bounds, Float tMin, bool &hit) const {
+void OcChunkBFSAccel::RecurseIntersect(const Ray &ray, SurfaceInteraction *isect, uint32_t chunk_offset, Bounds3f parent_bounds, Float tMin, bool &hit) const {
     Chunk c = octree[chunk_offset];
 
-    std::array<Node, 1 + BITFIELD_SIZE * CHUNK_DEPTH> traversal; // Node stack
+    std::array<Node, 1 + BITFIELD_SIZE * BFS_CHUNK_DEPTH> traversal; // Node stack
     traversal[0] = Node{0, parent_bounds, tMin};
     int traversal_idx = 0;
 
@@ -242,23 +167,25 @@ void OctreeAccel::RecurseIntersect(const Ray &ray, SurfaceInteraction *isect, ui
 
         if (node.bitcnt >= 0) {
             // Inner Node ... 
-            if (node.bitcnt < NUM_SETS_PER_CHUNK) {
+            if (node.bitcnt < BFS_NUM_SETS_PER_CHUNK) {
                 // ... with children in same chunk
                 ChildTraversal child_traversal = FindTraversalOrder(ray, node.bounds, node.tMin);
                 Vector3f b_h = BoundsHalf(node.bounds);
+                int base_child_rank = BitfieldRankOffset(c.nodes, 8 * node.bitcnt);
                 for (int i = child_traversal.size - 1; i >= 0; i--) {
                     // Kindknoten werden dann nicht mehr traversiert, wenn bereits ein näherer Schnitt ermittelt wurde
                     // Dadurch deckt man auch den Fall ab, dass zwar ein Schnitt gefunden wurde, dieser aber außerhalb der Knotens liegt
                     if (child_traversal.nodes[i].tMin > ray.tMax) continue;
 
                     int idx = 8 * node.bitcnt + child_traversal.nodes[i].idx;
-                    int bitcnt = Rank(c.nodes, idx) + (IsInnerNode(c.nodes, idx) ? 1 : -(idx + 1));
+                    int bitcnt = base_child_rank + BitfieldRankUnique(c.nodes, idx);
+                    bitcnt += IsInnerNode(c.nodes, idx) ? 1 : -(idx + 1);
                     Bounds3f child_bounds = DivideBounds(node.bounds, child_traversal.nodes[i].idx, b_h);
                     traversal[++traversal_idx] = Node{bitcnt, child_bounds, child_traversal.nodes[i].tMin};
                 }
             } else {
                 // ... with children in different chunk
-                uint32_t child_chunk = c.child_chunk_offset + node.bitcnt - NUM_SETS_PER_CHUNK;
+                uint32_t child_chunk = c.child_chunk_offset + node.bitcnt - BFS_NUM_SETS_PER_CHUNK;
                 RecurseIntersect(ray, isect, child_chunk, node.bounds, node.tMin, hit);
             }
         } else {
@@ -273,7 +200,7 @@ void OctreeAccel::RecurseIntersect(const Ray &ray, SurfaceInteraction *isect, ui
     }
 }
 
-bool OctreeAccel::IntersectP(const Ray &ray) const {
+bool OcChunkBFSAccel::IntersectP(const Ray &ray) const {
     ProfilePhase p(Prof::AccelIntersectP);
     SurfaceInteraction isect;
     return Intersect(ray, &isect);
@@ -282,14 +209,14 @@ bool OctreeAccel::IntersectP(const Ray &ray) const {
 // === VISUALIZATION ===
 
 // Code to visualize octree
-void OctreeAccel::lh_dump(const char *path) {
+void OcChunkBFSAccel::lh_dump(const char *path) {
     FILE *f = fopen(path, "wb");
     uint32_t vcnt = 1;
     lh_dump_rec(f, &vcnt, 0, WorldBound());
     fclose(f);
 }
 
-void OctreeAccel::lh_dump_rec(FILE *f, uint32_t *vcnt_, uint32_t chunk_offset, Bounds3f bounds) {
+void OcChunkBFSAccel::lh_dump_rec(FILE *f, uint32_t *vcnt_, uint32_t chunk_offset, Bounds3f bounds) {
     Chunk c = octree[chunk_offset];
 
     std::queue<Bounds3f> bounds_q;
@@ -299,7 +226,7 @@ void OctreeAccel::lh_dump_rec(FILE *f, uint32_t *vcnt_, uint32_t chunk_offset, B
     int current_set_idx = 0;
 
     int num_node_sets = 1; // We have at least 1 node 'set' of 8 nodes in the chunk
-    for (int idx = 0; idx < CHUNK_DEPTH; idx++) {
+    for (int idx = 0; idx < BFS_CHUNK_DEPTH; idx++) {
         for (BITFIELD_TYPE set = 0; set < NUM_SETS_PER_BITFIELD; set++) {
             if (current_set_idx++ >= num_node_sets) break; // This chunk wasn't completely filled
             
@@ -308,7 +235,7 @@ void OctreeAccel::lh_dump_rec(FILE *f, uint32_t *vcnt_, uint32_t chunk_offset, B
             for (BITFIELD_TYPE bit = 0; bit < 8; bit++) {
                 Bounds3f b = DivideBounds(bounds_q.front(), bit, b_h);
                 if (((c.nodes[idx] >> (set*8 + bit)) & ONE) == ONE) {
-                    if (num_node_sets < NUM_SETS_PER_CHUNK) {
+                    if (num_node_sets < BFS_NUM_SETS_PER_CHUNK) {
                         // Inner Node
                         bounds_q.push(b);
                         num_node_sets++;
@@ -342,17 +269,17 @@ void OctreeAccel::lh_dump_rec(FILE *f, uint32_t *vcnt_, uint32_t chunk_offset, B
     }
 }
 
-void OctreeAccel::lh_dump_dfs(const char *path) {
+void OcChunkBFSAccel::lh_dump_dfs(const char *path) {
     FILE *f = fopen(path, "wb");
     uint32_t vcnt = 1;
     lh_dump_rec_dfs(f, &vcnt, 0, WorldBound());
     fclose(f);
 }
 
-void OctreeAccel::lh_dump_rec_dfs(FILE *f, uint32_t *vcnt_, uint32_t chunk_offset, Bounds3f bounds) {
+void OcChunkBFSAccel::lh_dump_rec_dfs(FILE *f, uint32_t *vcnt_, uint32_t chunk_offset, Bounds3f bounds) {
     Chunk c = octree[chunk_offset];
 
-    std::array<Node, 1 + BITFIELD_SIZE * CHUNK_DEPTH> traversal; // Node stack
+    std::array<Node, 1 + BITFIELD_SIZE * BFS_CHUNK_DEPTH> traversal; // Node stack
     traversal[0] = Node{0, bounds};
     int traversal_idx = 0;
 
@@ -362,19 +289,21 @@ void OctreeAccel::lh_dump_rec_dfs(FILE *f, uint32_t *vcnt_, uint32_t chunk_offse
 
         if (node.bitcnt >= 0) {
             // Inner Node ... 
-            if (node.bitcnt < NUM_SETS_PER_CHUNK) {
+            if (node.bitcnt < BFS_NUM_SETS_PER_CHUNK) {
                 // ... with children in same chunk
                 Vector3f b_h = BoundsHalf(node.bounds);
+                int child_base_rank = BitfieldRankOffset(c.nodes, 8 * node.bitcnt);
                 for (int i = 7; i >= 0; i--) {
                     // Kindknoten werden dann nicht mehr traversiert, wenn bereits ein näherer Schnitt ermittelt wurde
                     // Dadurch deckt man auch den Fall ab, dass zwar ein Schnitt gefunden wurde, dieser aber außerhalb der Knotens liegt
                     int idx = 8 * node.bitcnt + i;
-                    int bitcnt = Rank(c.nodes, idx) + (IsInnerNode(c.nodes, idx) ? 1 : -(idx + 1));
+                    int bitcnt = child_base_rank + BitfieldRankUnique(c.nodes, idx);
+                    bitcnt += IsInnerNode(c.nodes, idx) ? 1 : -(idx + 1);
                     traversal[++traversal_idx] = Node{bitcnt, DivideBounds(node.bounds, i, b_h)};
                 }
             } else {
                 // ... with chilren in different chunk
-                uint32_t child_chunk = c.child_chunk_offset + node.bitcnt - NUM_SETS_PER_CHUNK;
+                uint32_t child_chunk = c.child_chunk_offset + node.bitcnt - BFS_NUM_SETS_PER_CHUNK;
                 lh_dump_rec_dfs(f, vcnt_, child_chunk, node.bounds);
             }
         } else {

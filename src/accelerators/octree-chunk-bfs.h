@@ -35,8 +35,8 @@
 #pragma once
 #endif
 
-#ifndef PBRT_ACCELERATORS_OCTREEACCEL_H
-#define PBRT_ACCELERATORS_OCTREEACCEL_H
+#ifndef PBRT_ACCELERATORS_OCCHUNKBFSACCEL_H
+#define PBRT_ACCELERATORS_OCCHUNKBFSACCEL_H
 
 // accelerators/octree.h*
 #include "pbrt.h"
@@ -46,25 +46,15 @@
 
 namespace pbrt {
 
-// Change these for different types/sizes
-typedef uint64_t BITFIELD_TYPE;
-const int CHUNK_DEPTH = 7; // Size of chunk array of type BITFIELD_X below
-
-// DON'T change these!
-const int BITFIELD_SIZE = 8 * sizeof(BITFIELD_TYPE);
-const int NUM_SETS_PER_BITFIELD = BITFIELD_SIZE / 8;
-const int NUM_SETS_PER_CHUNK = NUM_SETS_PER_BITFIELD * CHUNK_DEPTH;
-const BITFIELD_TYPE ZERO = (BITFIELD_TYPE)0;
-const BITFIELD_TYPE ONE = (BITFIELD_TYPE)1;
-
 // OcteeAccel Declarations
 
-class OctreeAccel : public Aggregate {
+class OcChunkBFSAccel : public Aggregate {
+
   public:
     // KdTreeAccel Public Methods
-    OctreeAccel(std::vector<std::shared_ptr<Primitive>> p);
+    OcChunkBFSAccel(std::vector<std::shared_ptr<Primitive>> p);
     Bounds3f WorldBound() const { return wb; }
-    ~OctreeAccel();
+    ~OcChunkBFSAccel();
     bool Intersect(const Ray &ray, SurfaceInteraction *isect) const;
     bool IntersectP(const Ray &ray) const;
 
@@ -75,11 +65,13 @@ class OctreeAccel : public Aggregate {
     Bounds3f wb; // World Bounds
     OctreeBasicAccel oba;
 
+    struct Node { int bitcnt; Bounds3f bounds; Float tMin; };
+
     struct alignas(64) Chunk {
       uint32_t child_chunk_offset;
       uint32_t sizes_offset;
       // TODO sizes array ausserhalb chunks
-      std::array<BITFIELD_TYPE, CHUNK_DEPTH> nodes; // 1 inner node, 0 leaf node
+      std::array<BITFIELD_TYPE, BFS_CHUNK_DEPTH> nodes; // 1 inner node, 0 leaf node
     };
     std::vector<std::shared_ptr<Primitive>> leaves;
     std::vector<int> sizes;
@@ -96,7 +88,7 @@ class OctreeAccel : public Aggregate {
 
 };
 
-std::shared_ptr<OctreeAccel> CreateOctreeAccelerator(
+std::shared_ptr<OcChunkBFSAccel> CreateOcChunkBFSAccelerator(
     std::vector<std::shared_ptr<Primitive>> prims, const ParamSet &ps);
 
 } // namespace pbrt
