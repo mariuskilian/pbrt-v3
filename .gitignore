@@ -3,6 +3,7 @@ build
 src/build
 src/bin
 src/objs
+scenes
 *.obj
 .sconsign.dblite
 .vscode
