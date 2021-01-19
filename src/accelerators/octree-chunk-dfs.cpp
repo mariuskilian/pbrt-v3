@@ -75,7 +75,22 @@ OcChunkDFSAccel::OcChunkDFSAccel(std::vector<std::shared_ptr<Primitive>> p) : pr
     if (oba.Nodes().size() > 1) {
         octree.push_back(Chunk{});
         sizes.push_back(0);
-        Recurse(0, wb, primitives, 0);
+        std::queue<ChunkCreator> cc_q;
+        ChunkCreator root_chunk = *new ChunkCreator;
+        root_chunk.root_node_offset = 0;
+        root_chunk.b_root = wb;
+        root_chunk.p = primitives;
+        root_chunk.chunk_idx = 0;
+        cc_q.push(root_chunk);
+        while (!cc_q.empty()) {
+            // if (cc_q.size() < 3) {
+            //     int x = 3;
+            // }
+            ChunkCreator cc = cc_q.front();
+            std::vector<ChunkCreator> cc_res = CreateChunk(cc);
+            for (int i = 0; i < cc_res.size(); i++) cc_q.push(cc_res[i]);
+            cc_q.pop();
+        }
     }
     printf("Octree: DFS: Creating DFS Octree Done!\n");
     
@@ -85,21 +100,19 @@ OcChunkDFSAccel::OcChunkDFSAccel(std::vector<std::shared_ptr<Primitive>> p) : pr
     //printf("Octree: DFS: Visualization done!\n")
 }
 
-void OcChunkDFSAccel::Recurse(uint32_t root_node_offset, Bounds3f b_root, std::vector<std::shared_ptr<Primitive>> p, int chunk_idx) {
-    octree[chunk_idx].child_chunk_offset = octree.size();
-    octree[chunk_idx].sizes_offset = sizes.size();
+std::vector<OcChunkDFSAccel::ChunkCreator> OcChunkDFSAccel::CreateChunk(ChunkCreator cc) {
+    octree[cc.chunk_idx].child_chunk_offset = octree.size();
+    octree[cc.chunk_idx].sizes_offset = sizes.size();
 
     // Step 1: Traverse the tree in DFS style to find the number of real inner
     // nodes in each layer, so that the chunk is filled as completely as possible.
     // To aid with this the following RealInnerNode structure saves all relevant
     // information about a real inner node, including a list to all its child RINs
-    struct Child { bool is_rin; uint32_t node; Bounds3f b; std::vector<std::shared_ptr<Primitive>> prims; };
+    struct Child { bool is_rin; uint32_t node; Bounds3f b; uint32_t num_prims; };
     struct RealInnerNode {
         // Base information. Node offset, bounds and primitive list
-        int node_idx;
         uint32_t children_offset;
         Bounds3f bounds;
-        std::vector<std::shared_ptr<Primitive>> prims;
         // Meta information about current node
         bool root = false;
         bool initialized = false;
@@ -111,27 +124,27 @@ void OcChunkDFSAccel::Recurse(uint32_t root_node_offset, Bounds3f b_root, std::v
     };
     
     RealInnerNode root_ns = *new RealInnerNode;
-    root_ns.children_offset = oba.Nodes()[root_node_offset] >> 1;
-    root_ns.bounds = b_root;
-    root_ns.prims = primitives;
+    root_ns.children_offset = oba.Nodes()[cc.root_node_offset] >> 1;
+    root_ns.bounds = cc.b_root;
     root_ns.root = true;
 
     int chunk_fill_size = 1;
     RealInnerNode *rin = &root_ns;
     while (chunk_fill_size < DFS_NUM_SETS_PER_CHUNK) {
         // Pre-calculate all 8 bounds for simplicity
-        Vector3f b_h = BoundsHalf(rin->bounds);
-        for (int i = 0; i < 8; i++) rin->children[i].b = DivideBounds(rin->bounds, i, b_h);
 
         // Initialize node set
         if (!rin->initialized) {
             // Calculate num prims in each child node;
+            Vector3f b_h = BoundsHalf(rin->bounds);
             for (int i = 0; i < 8; i++) {
                 rin->children[i].is_rin = false;
                 rin->children[i].node = oba.Nodes()[rin->children_offset + i];
-                for (int j = 0; j < rin->prims.size(); j++)
-                    if (BoundsContainPrim(rin->children[i].b, rin->prims[j]))
-                        rin->children[i].prims.push_back(rin->prims[j]);
+                rin->children[i].b = DivideBounds(rin->bounds, i, b_h);
+                rin->children[i].num_prims = 0;
+                for (int j = 0; j < cc.p.size(); j++)
+                    if (BoundsContainPrim(rin->children[i].b, cc.p[j]))
+                        rin->children[i].num_prims++;
             }
             rin->initialized = true;
         }
@@ -140,14 +153,15 @@ void OcChunkDFSAccel::Recurse(uint32_t root_node_offset, Bounds3f b_root, std::v
         int idx_max_prims = -1;
         uint32_t max_prims = 0;
         for (int i = 0; i < 8; i++) {
+            Child child = rin->children[i];
             // Skip leaf nodes
-            if ((oba.Nodes()[rin->children_offset + i] & 1) == 1) continue;
+            if ((child.node & (uint32_t)1) == (uint32_t)1) continue;
             // Skip already processed nodes
-            if (rin->children[i].is_rin) continue;
+            if (child.is_rin) continue;
             // Determine max
-            if (rin->children[i].prims.size() >= max_prims) {
+            if (child.num_prims >= max_prims) {
                 idx_max_prims = i;
-                max_prims = rin->children[i].prims.size();
+                max_prims = rin->children[i].num_prims;
             }
         }
 
@@ -160,11 +174,9 @@ void OcChunkDFSAccel::Recurse(uint32_t root_node_offset, Bounds3f b_root, std::v
 
         // Otherwise process the chosen child node instead now
         Child child = rin->children[idx_max_prims];
-        RealInnerNode *child_rin = new RealInnerNode;
-        child_rin->node_idx = idx_max_prims;
+        RealInnerNode *child_rin = new RealInnerNode();
         child_rin->children_offset = child.node >> 1;
         child_rin->bounds = child.b;
-        child_rin->prims = child.prims;
         child_rin->parent = rin;
 
         rin->children[idx_max_prims].is_rin = true;
@@ -173,19 +185,10 @@ void OcChunkDFSAccel::Recurse(uint32_t root_node_offset, Bounds3f b_root, std::v
         chunk_fill_size++;
     }
 
-    //DEBUG
-    // std::queue<RealInnerNode*> rq;
-    // rq.push(&root_ns);
-    // while (!rq.empty()) {
-    //     RealInnerNode* r = rin_q.front();
-    // }
-    //DEBUG END
-
     // Step 2: Go through each layer, and take the number of real inner nodes in
     // that layer as determined in Step 1, but traverse them from lowest to highest
     // node-idx, and in BFS style. Add these nodes to the bitfield, or call Recurse
-    struct ChunkPtrNode { uint32_t offset; Bounds3f b; std::vector<std::shared_ptr<Primitive>> p; };
-    std::vector<ChunkPtrNode> chunk_ptr_nodes;
+    std::vector<ChunkCreator> chunk_ptr_nodes;
     std::queue<RealInnerNode*> rin_q;
     rin_q.push(&root_ns);
     int num_nodes = 0; // number of individual nodes already processed
@@ -197,28 +200,31 @@ void OcChunkDFSAccel::Recurse(uint32_t root_node_offset, Bounds3f b_root, std::v
         for (int i = 0; i < 8; i++) {
             uint32_t child_offset = rin->children_offset + i;
             Child child = rin->children[i];
-            bool is_inner_node = (child.node & 1) == 0;
+            bool is_inner_node = (child.node & (uint32_t)1) == (uint32_t)0;
             
             int idx = num_nodes / BITFIELD_SIZE;
             int bit_pos = num_nodes % BITFIELD_SIZE;
             // When starting a new index, make sure the initial value of the bitcode is 0
             if (bit_pos == 0) {
-                octree[chunk_idx].nodes[idx] = ZERO;
-                octree[chunk_idx].types[idx] = ZERO;
+                octree[cc.chunk_idx].nodes[idx] = ZERO;
+                octree[cc.chunk_idx].types[idx] = ZERO;
             }
 
             if (is_inner_node) {
-                octree[chunk_idx].nodes[idx] |= ONE << bit_pos;
+                octree[cc.chunk_idx].nodes[idx] |= ONE << bit_pos;
                 if (child.is_rin) {
                     rin_q.push(rin->rin_childs[i]);
                 } else {
                     octree.push_back(*new Chunk);
-                    ChunkPtrNode cpn = *new ChunkPtrNode;
-                    cpn.offset = child_offset;
-                    cpn.b = child.b;
-                    cpn.p = child.prims;
+                    ChunkCreator cpn = *new ChunkCreator;
+                    cpn.root_node_offset = child_offset;
+                    cpn.b_root = child.b;
+                    std::vector<std::shared_ptr<Primitive>> p;
+                    for (int i = 0; i < cc.p.size(); i++) if (BoundsContainPrim(child.b, cc.p[i])) p.push_back(cc.p[i]);
+                    cpn.p = p;
+                    cpn.chunk_idx = octree[cc.chunk_idx].child_chunk_offset + chunk_ptr_nodes.size();
                     chunk_ptr_nodes.push_back(cpn);
-                    octree[chunk_idx].types[idx] |= ONE << bit_pos;
+                    octree[cc.chunk_idx].types[idx] |= ONE << bit_pos;
                 }
             } else {
                 uint32_t prim_start = child.node >> 1;
@@ -233,10 +239,7 @@ void OcChunkDFSAccel::Recurse(uint32_t root_node_offset, Bounds3f b_root, std::v
     }
     
     // Create additional chunks as needed
-    for (int i = 0; i < chunk_ptr_nodes.size(); i++) {
-        ChunkPtrNode cpn = chunk_ptr_nodes[i];
-        Recurse(cpn.offset, cpn.b, cpn.p, octree[chunk_idx].child_chunk_offset + i);
-    }
+    return chunk_ptr_nodes;
 }
 
 std::shared_ptr<OcChunkDFSAccel> CreateOcChunkDFSAccelerator(std::vector<std::shared_ptr<Primitive>> prims, const ParamSet &ps) {

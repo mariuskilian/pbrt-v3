@@ -42,6 +42,7 @@
 
 // API Additional Headers
 #include "accelerators/bvh.h"
+#include "accelerators/bvh-chunk-bfs.h"
 #include "accelerators/kdtreeaccel.h"
 #include "accelerators/octree-basic.h"
 #include "accelerators/octree-chunk-bfs.h"
@@ -775,8 +776,10 @@ std::shared_ptr<Primitive> MakeAccelerator(
     std::vector<std::shared_ptr<Primitive>> prims,
     const ParamSet &paramSet) {
     std::shared_ptr<Primitive> accel;
-    if (name == "bvh")
+    if      (name == "bvh")
         accel = CreateBVHAccelerator(std::move(prims), paramSet);
+    else if (name == "bvh-chunk-bfs")
+        accel = CreateBVHChunkBFSAccelerator(std::move(prims), paramSet);
     else if (name == "kdtree")
         accel = CreateKdTreeAccelerator(std::move(prims), paramSet);
     else if (name == "octree-basic")

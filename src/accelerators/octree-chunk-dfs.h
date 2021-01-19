@@ -65,6 +65,9 @@ class OcChunkDFSAccel : public Aggregate {
     OctreeBasicAccel oba;
 
     struct Node { int bitcnt_nodes; int bitcnt_types; Bounds3f bounds; Float tMin; };
+    
+    struct ChunkCreator { uint32_t root_node_offset; Bounds3f b_root;
+        std::vector<std::shared_ptr<Primitive>> p; int chunk_idx; };
 
     struct alignas(64) Chunk {
       uint32_t child_chunk_offset;
@@ -78,7 +81,7 @@ class OcChunkDFSAccel : public Aggregate {
     // TODO make sure array is aligned to 64-bit addresses
     std::vector<Chunk> octree;
     
-    void Recurse(uint32_t root_node_offset, Bounds3f b_root, std::vector<std::shared_ptr<Primitive>> p, int chunk_idx); 
+    std::vector<ChunkCreator> CreateChunk(ChunkCreator cc); 
     void RecurseIntersect(const Ray &ray, SurfaceInteraction *isect, uint32_t chunk_offset, Bounds3f parent_bounds, Float tMin, bool &hit) const;
     void lh_dump(const char *path);
     void lh_dump_rec(FILE *f, uint32_t *vcnt_, uint32_t chunk_offset, Bounds3f bounds);

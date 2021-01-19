@@ -106,7 +106,7 @@ class OctreeBasicAccel : public Aggregate {
 
 std::shared_ptr<OctreeBasicAccel> CreateOctreeBasicAccelerator(
     std::vector<std::shared_ptr<Primitive>> prims, const ParamSet &ps);
-
+    
 } // namespace pbrt
 
 #endif  // PBRT_ACCELERATORS_KDTREEACCEL_H
