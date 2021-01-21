@@ -41,18 +41,19 @@
 // accelerators/bvh-chunk-bfs.h*
 #include "pbrt.h"
 #include "primitive.h"
+#include "bvh.h"
 #include <atomic>
 
 namespace pbrt {
 
+typedef BVHAccel::SplitMethod SplitMethod;
+
 // BVHChunkBFSAccel Forward Declarations
-struct LinearBVHChunkBFSNode;
 
 // BVHAccel Declarations
 class BVHChunkBFSAccel : public Aggregate {
   public:
     // BVHAccel Public Types
-    enum class SplitMethod { SAH, HLBVH, Middle, EqualCounts };
 
     // BVHAccel Public Methods
     BVHChunkBFSAccel(std::vector<std::shared_ptr<Primitive>> p,
@@ -64,12 +65,21 @@ class BVHChunkBFSAccel : public Aggregate {
     bool IntersectP(const Ray &ray) const;
 
   private:
+    struct BVHChunkBFS;
+
+    typedef uint64_t bf_type;
+    static const int bf_size = sizeof(bf_type) * 8;
+    static const int chunk_depth = 3;
+    static const int node_pairs_per_chunk = 64 * chunk_depth / 2;
 
     // BVHAccel Private Data
     const int maxPrimsInNode;
     const SplitMethod splitMethod;
     std::vector<std::shared_ptr<Primitive>> primitives;
-    LinearBVHChunkBFSNode *nodes = nullptr;
+
+    std::vector<BVHChunkBFS> bvh_chunks;
+
+    BVHAccel *bvh;
 };
 
 std::shared_ptr<BVHChunkBFSAccel> CreateBVHChunkBFSAccelerator(

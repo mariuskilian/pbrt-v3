@@ -38,6 +38,7 @@
 #include "stats.h"
 #include "parallel.h"
 #include <algorithm>
+#include <queue>
 
 namespace pbrt {
 
@@ -52,6 +53,17 @@ struct LinearBVHChunkBFSNode {
     uint8_t pad[1];        // ensure 32 byte total size
 };
 
+struct alignas(64) BVHChunkBFSAccel::BVHChunkBFS {
+    Bounds3f b_root;
+    uint32_t multipliers_offset;
+    uint32_t primitive_offset;
+    uint32_t child_chunk_offset; // TODO now have 32 bits more than 64B :(
+    uint64_t bitfield[chunk_depth];
+};
+struct Bounds3k { uint8_t min[3]; uint8_t max[3]; };
+std::vector<Bounds3k> multipliers;
+std::vector<uint32_t> sizes;
+
 // BVHAccel Method Definitions
 BVHChunkBFSAccel::BVHChunkBFSAccel(std::vector<std::shared_ptr<Primitive>> p,
                    int maxPrimsInNode, SplitMethod splitMethod)
@@ -59,30 +71,103 @@ BVHChunkBFSAccel::BVHChunkBFSAccel(std::vector<std::shared_ptr<Primitive>> p,
       splitMethod(splitMethod),
       primitives(std::move(p)) {
     ProfilePhase _(Prof::AccelConstruction);
+
+    bvh = new BVHAccel(p, maxPrimsInNode, splitMethod);
+    LinearBVHNode *nodes = std::move(bvh->GetNodes());
+    if (!nodes) return;
+    // Chunk struct for building the chunks
+    struct Chunk { uint32_t root_node_idx; Bounds3f b_root; };
+    uint32_t chunk_idx = 0;
+    std::queue<Chunk> chunk_q;
+    bvh_chunks.push_back(BVHChunkBFS{});
+    std::vector<std::shared_ptr<Primitive>> orderedPrims;
+    // Build a full chunk within each iteration of the loop
+    while (!chunk_q.empty()) {
+        Chunk c = chunk_q.front();
+        // === Building Chunk ===
+        // Set meta information of chunk
+        bvh_chunks[chunk_idx].b_root = c.b_root;
+        bvh_chunks[chunk_idx].multipliers_offset = multipliers.size();
+        bvh_chunks[chunk_idx].primitive_offset = orderedPrims.size();
+        bvh_chunks[chunk_idx].child_chunk_offset = bvh_chunks.size();
+        // Make a node queue and push the root nodes 2 children
+        std::queue<uint32_t> bvh_q;
+        bvh_q.push(c.root_node_idx + 1);
+        bvh_q.push(bvh->GetNodes()[c.root_node_idx].secondChildOffset);
+        // Initialize variables needed to fill bitfield
+        int chunk_fill = 1; // number of pairs of nodes processed and/or in queue
+        int nodes_processed = 0; // number of nodes already processed
+        bool firstLeafInChunk = true;
+        // Fill the bitfield of this chunk, processing one node per iteration
+        while (!bvh_q.empty()) {
+            // Variables for easier access to information
+            uint32_t node_idx = bvh_q.front();
+            const LinearBVHNode *node = &bvh->GetNodes()[node_idx];
+            bool is_inner_node = node->nPrimitives == 0;
+            // Find correct idx and bit position in bitfield
+            int idx = nodes_processed / bf_size;
+            int bit_pos = nodes_processed % bf_size;
+            // When starting a new index, make sure the initial value of the bitcode is 0
+            if (bit_pos == 0) bvh_chunks[chunk_idx].bitfield[idx] = (bf_type)0;
+            // Determine node type, and process accordingly
+            if (is_inner_node) {
+                bvh_chunks[chunk_idx].bitfield[idx] |= (bf_type)1 << bit_pos;
+                if (chunk_fill >= node_pairs_per_chunk) {
+                    // Chunk Ptr Inner Node
+                    chunk_q.push(Chunk{bvh_q.front(), node->bounds});
+                    bvh_chunks.push_back(BVHChunkBFS{});
+                } else {
+                    // Real Inner Node
+                    bvh_q.push(node_idx + 1);
+                    bvh_q.push(node->secondChildOffset);
+                    chunk_fill++;
+                }
+            } else {
+                // Leaf Node
+                if (firstLeafInChunk) {
+                    sizes.push_back(0);
+                    firstLeafInChunk = false;
+                }
+                sizes.push_back(sizes.back() + node->nPrimitives);
+                for (int i = 0; i < node->nPrimitives; i++)
+                    orderedPrims.push_back(bvh->GetPrimitives()[node->primitivesOffset + i]);
+            }
+            // Update node counter and -queue
+            nodes_processed++;
+            bvh_q.pop();
+        }
+        // Update chunk counter and -queue
+        chunk_idx++;
+        chunk_q.pop();
+    }
+    primitives.swap(orderedPrims);
 }
 
 Bounds3f BVHChunkBFSAccel::WorldBound() const {
-    return nodes ? nodes[0].bounds : Bounds3f();
+    return bvh->WorldBound();
 }
 
-BVHChunkBFSAccel::~BVHChunkBFSAccel() { FreeAligned(nodes); }
+BVHChunkBFSAccel::~BVHChunkBFSAccel() {
+    bvh->~BVHAccel();
+    FreeAligned(bvh);
+}
 
 std::shared_ptr<BVHChunkBFSAccel> CreateBVHChunkBFSAccelerator(
     std::vector<std::shared_ptr<Primitive>> prims, const ParamSet &ps) {
     std::string splitMethodName = ps.FindOneString("splitmethod", "sah");
-    BVHChunkBFSAccel::SplitMethod splitMethod;
+    SplitMethod splitMethod;
     if (splitMethodName == "sah")
-        splitMethod = BVHChunkBFSAccel::SplitMethod::SAH;
+        splitMethod = SplitMethod::SAH;
     else if (splitMethodName == "hlbvh")
-        splitMethod = BVHChunkBFSAccel::SplitMethod::HLBVH;
+        splitMethod = SplitMethod::HLBVH;
     else if (splitMethodName == "middle")
-        splitMethod = BVHChunkBFSAccel::SplitMethod::Middle;
+        splitMethod = SplitMethod::Middle;
     else if (splitMethodName == "equal")
-        splitMethod = BVHChunkBFSAccel::SplitMethod::EqualCounts;
+        splitMethod = SplitMethod::EqualCounts;
     else {
         Warning("BVH split method \"%s\" unknown.  Using \"sah\".",
                 splitMethodName.c_str());
-        splitMethod = BVHChunkBFSAccel::SplitMethod::SAH;
+        splitMethod = SplitMethod::SAH;
     }
 
     int maxPrimsInNode = ps.FindOneInt("maxnodeprims", 4);
@@ -90,14 +175,14 @@ std::shared_ptr<BVHChunkBFSAccel> CreateBVHChunkBFSAccelerator(
 }
 
 bool BVHChunkBFSAccel::Intersect(const Ray &ray, SurfaceInteraction *isect) const {
-    if (!nodes) return false;
+    if (true) return false;
     ProfilePhase p(Prof::AccelIntersect);
     bool hit = false;
     return hit;
 }
 
 bool BVHChunkBFSAccel::IntersectP(const Ray &ray) const {
-    if (!nodes) return false;
+    if (true) return false;
     ProfilePhase p(Prof::AccelIntersectP);
     return false;
 }
