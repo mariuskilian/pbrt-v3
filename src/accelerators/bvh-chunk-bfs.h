@@ -47,6 +47,8 @@
 namespace pbrt {
 
 typedef BVHAccel::SplitMethod SplitMethod;
+struct Bounds3k { uint8_t min[3]; uint8_t max[3]; };
+struct ChildrenBuildInfo { uint32_t idx[2]; Bounds3f b_comp[2]; Bounds3k b_key[2]; };
 
 // BVHChunkBFSAccel Forward Declarations
 
@@ -80,6 +82,14 @@ class BVHChunkBFSAccel : public Aggregate {
     std::vector<BVHChunkBFS> bvh_chunks;
 
     BVHAccel *bvh;
+
+    Bounds3k FindBoundsKey(Bounds3f b_root, Bounds3f b);
+    Bounds3f FindCompressedBounds(Bounds3f b_root, Bounds3k b_k);
+    ChildrenBuildInfo GetChildrenBuildInfo(Bounds3f b_root, uint32_t node_offset);
+
+    void lh_dump(const char *path, bool dfs);
+    void lh_dump_rec(FILE *f, uint32_t *vcnt_, uint32_t chunk_offset, Bounds3f bounds);
+    void lh_dump_rec_dfs(FILE *f, uint32_t *vcnt_, uint32_t chunk_offset, Bounds3f bounds);
 };
 
 std::shared_ptr<BVHChunkBFSAccel> CreateBVHChunkBFSAccelerator(

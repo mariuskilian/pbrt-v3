@@ -39,19 +39,9 @@
 #include "parallel.h"
 #include <algorithm>
 #include <queue>
+#include <cmath>
 
 namespace pbrt {
-
-struct LinearBVHChunkBFSNode {
-    Bounds3f bounds;
-    union {
-        int primitivesOffset;   // leaf
-        int secondChildOffset;  // interior
-    };
-    uint16_t nPrimitives;  // 0 -> interior node
-    uint8_t axis;          // interior node: xyz
-    uint8_t pad[1];        // ensure 32 byte total size
-};
 
 struct alignas(64) BVHChunkBFSAccel::BVHChunkBFS {
     Bounds3f b_root;
@@ -60,9 +50,42 @@ struct alignas(64) BVHChunkBFSAccel::BVHChunkBFS {
     uint32_t child_chunk_offset; // TODO now have 32 bits more than 64B :(
     uint64_t bitfield[chunk_depth];
 };
-struct Bounds3k { uint8_t min[3]; uint8_t max[3]; };
 std::vector<Bounds3k> multipliers;
 std::vector<uint32_t> sizes;
+
+Bounds3k BVHChunkBFSAccel::FindBoundsKey(Bounds3f b_root, Bounds3f b) {
+    Bounds3k b_k = Bounds3k{};
+    for (int i = 0; i < 3; i++) {
+        Float dist = b_root.pMax[i] - b_root.pMin[i];
+        b_k.min[i] = (int)floor(255 * (b.pMin[i] - b_root.pMin[i]) / dist);
+        b_k.max[i] = (int)ceil(255 * (b.pMax[i] - b_root.pMin[i]) / dist);
+    }
+    return b_k;
+}
+
+Bounds3f BVHChunkBFSAccel::FindCompressedBounds(Bounds3f b_root, Bounds3k b_k) {
+    Bounds3f b;
+    for (int i = 0; i < 3; i++) {
+        Float dist = b_root.pMax[i] - b_root.pMin[i];
+        b.pMin[i] = (dist * b_k.min[i] / 255) + b.pMin[i];
+        b.pMax[i] = (dist * b_k.max[i] / 255) + b.pMin[i];
+    }
+    return b;
+
+}
+
+ChildrenBuildInfo BVHChunkBFSAccel::GetChildrenBuildInfo(
+        Bounds3f b_root, uint32_t node_offset) {
+    ChildrenBuildInfo cbi = ChildrenBuildInfo{};
+    cbi.idx[0] = node_offset + 1;
+    cbi.idx[1] = bvh->GetNodes()[node_offset].secondChildOffset;
+    for (int child = 0; child < 2; child++) {
+        Bounds3f b_child = bvh->GetNodes()[cbi.idx[child]].bounds;
+        cbi.b_key[child] = FindBoundsKey(b_root, b_child);
+        cbi.b_comp[child] = FindCompressedBounds(b_root, cbi.b_key[child]);
+    }
+    return cbi;
+}
 
 // BVHAccel Method Definitions
 BVHChunkBFSAccel::BVHChunkBFSAccel(std::vector<std::shared_ptr<Primitive>> p,
@@ -71,10 +94,9 @@ BVHChunkBFSAccel::BVHChunkBFSAccel(std::vector<std::shared_ptr<Primitive>> p,
       splitMethod(splitMethod),
       primitives(std::move(p)) {
     ProfilePhase _(Prof::AccelConstruction);
-
+    // Let BVHAccel build BVH Structure
     bvh = new BVHAccel(p, maxPrimsInNode, splitMethod);
-    LinearBVHNode *nodes = std::move(bvh->GetNodes());
-    if (!nodes) return;
+    if (!bvh->GetNodes()) return;
     // Chunk struct for building the chunks
     struct Chunk { uint32_t root_node_idx; Bounds3f b_root; };
     uint32_t chunk_idx = 0;
@@ -91,18 +113,20 @@ BVHChunkBFSAccel::BVHChunkBFSAccel(std::vector<std::shared_ptr<Primitive>> p,
         bvh_chunks[chunk_idx].primitive_offset = orderedPrims.size();
         bvh_chunks[chunk_idx].child_chunk_offset = bvh_chunks.size();
         // Make a node queue and push the root nodes 2 children
-        std::queue<uint32_t> bvh_q;
-        bvh_q.push(c.root_node_idx + 1);
-        bvh_q.push(bvh->GetNodes()[c.root_node_idx].secondChildOffset);
+        struct BVHChunkBFSNodeBuild { uint32_t node_idx; Bounds3f b_comp; Bounds3k b_key; };
+        std::queue<BVHChunkBFSNodeBuild> node_q;
+        ChildrenBuildInfo cbi = GetChildrenBuildInfo(c.b_root, c.root_node_idx);
+        for (int a = 0; a < 2; a++) 
+            node_q.push(BVHChunkBFSNodeBuild{cbi.idx[a], cbi.b_comp[a], cbi.b_key[a]});
         // Initialize variables needed to fill bitfield
         int chunk_fill = 1; // number of pairs of nodes processed and/or in queue
         int nodes_processed = 0; // number of nodes already processed
         bool firstLeafInChunk = true;
         // Fill the bitfield of this chunk, processing one node per iteration
-        while (!bvh_q.empty()) {
+        while (!node_q.empty()) {
             // Variables for easier access to information
-            uint32_t node_idx = bvh_q.front();
-            const LinearBVHNode *node = &bvh->GetNodes()[node_idx];
+            BVHChunkBFSNodeBuild build_node = node_q.front();
+            LinearBVHNode *node = &bvh->GetNodes()[build_node.node_idx];
             bool is_inner_node = node->nPrimitives == 0;
             // Find correct idx and bit position in bitfield
             int idx = nodes_processed / bf_size;
@@ -114,12 +138,13 @@ BVHChunkBFSAccel::BVHChunkBFSAccel(std::vector<std::shared_ptr<Primitive>> p,
                 bvh_chunks[chunk_idx].bitfield[idx] |= (bf_type)1 << bit_pos;
                 if (chunk_fill >= node_pairs_per_chunk) {
                     // Chunk Ptr Inner Node
-                    chunk_q.push(Chunk{bvh_q.front(), node->bounds});
+                    chunk_q.push(Chunk{build_node.node_idx, node->bounds});
                     bvh_chunks.push_back(BVHChunkBFS{});
                 } else {
                     // Real Inner Node
-                    bvh_q.push(node_idx + 1);
-                    bvh_q.push(node->secondChildOffset);
+                    ChildrenBuildInfo cbi = GetChildrenBuildInfo(build_node.b_comp, build_node.node_idx);
+                    for (int a = 0; a < 2; a++) 
+                        node_q.push(BVHChunkBFSNodeBuild{cbi.idx[a], cbi.b_comp[a], cbi.b_key[a]});
                     chunk_fill++;
                 }
             } else {
@@ -132,9 +157,10 @@ BVHChunkBFSAccel::BVHChunkBFSAccel(std::vector<std::shared_ptr<Primitive>> p,
                 for (int i = 0; i < node->nPrimitives; i++)
                     orderedPrims.push_back(bvh->GetPrimitives()[node->primitivesOffset + i]);
             }
+            multipliers.push_back(build_node.b_key);
             // Update node counter and -queue
             nodes_processed++;
-            bvh_q.pop();
+            node_q.pop();
         }
         // Update chunk counter and -queue
         chunk_idx++;
@@ -185,6 +211,38 @@ bool BVHChunkBFSAccel::IntersectP(const Ray &ray) const {
     if (true) return false;
     ProfilePhase p(Prof::AccelIntersectP);
     return false;
+}
+
+// VISUALISATION
+void BVHChunkBFSAccel::lh_dump(const char *path, bool dfs) {
+    FILE *f = fopen(path, "wb");
+    uint32_t vcnt = 1;
+    if (dfs) lh_dump_rec_dfs(f, &vcnt, 0, WorldBound());
+    else lh_dump_rec(f, &vcnt, 0, WorldBound());
+    fclose(f);
+}
+
+void BVHChunkBFSAccel::lh_dump_rec(FILE *f, uint32_t *vcnt_, uint32_t chunk_offset, Bounds3f bounds) {
+    BVHChunkBFS c = bvh_chunks[chunk_offset];
+
+    std::queue<Bounds3f> bounds_q;
+    bounds_q.push(bounds);
+
+    int child_chunk_cnt = 0;
+    int current_pair_idx = 0;
+
+    int num_node_pairs = 1;
+    for (int idx = 0; idx < chunk_depth; idx++) {
+        for (bf_type pair = 0; pair < num_node_pairs; pair++) {
+            if (current_pair_idx++ >= num_node_pairs) break;
+
+            
+        }
+    }
+}
+
+void BVHChunkBFSAccel::lh_dump_rec_dfs(FILE *f, uint32_t *vcnt_, uint32_t chunk_offset, Bounds3f bounds) {
+
 }
 
 }  // namespace pbrt
