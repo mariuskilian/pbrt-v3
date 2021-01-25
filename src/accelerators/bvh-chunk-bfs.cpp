@@ -43,6 +43,8 @@
 
 namespace pbrt {
 
+STAT_COUNTER("BVH-BFS/Total nodes", total_nodes);
+
 struct alignas(64) BVHChunkBFSAccel::BVHChunkBFS {
     Bounds3f b_root;
     uint32_t multipliers_offset;
@@ -53,25 +55,34 @@ struct alignas(64) BVHChunkBFSAccel::BVHChunkBFS {
 std::vector<Bounds3k> multipliers;
 std::vector<uint32_t> sizes;
 
-Bounds3k BVHChunkBFSAccel::FindBoundsKey(Bounds3f b_root, Bounds3f b) {
+Bounds3k BVHChunkBFSAccel::FindBoundsKey(Bounds3f b_root, Bounds3f b, Vector3f b2k) {
     Bounds3k b_k = Bounds3k{};
     for (int i = 0; i < 3; i++) {
-        Float dist = b_root.pMax[i] - b_root.pMin[i];
-        b_k.min[i] = (int)floor(255 * (b.pMin[i] - b_root.pMin[i]) / dist);
-        b_k.max[i] = (int)ceil(255 * (b.pMax[i] - b_root.pMin[i]) / dist);
+        // b2k = 255 / dist
+        b_k.min[i] = (uint8_t)floor(b2k[i] * (b.pMin[i] - b_root.pMin[i]));
+        b_k.max[i] = (uint8_t)ceil(b2k[i] * (b.pMax[i] - b_root.pMin[i]));
     }
     return b_k;
 }
 
-Bounds3f BVHChunkBFSAccel::FindCompressedBounds(Bounds3f b_root, Bounds3k b_k) {
+Bounds3f BVHChunkBFSAccel::FindCompressedBounds(Bounds3f b_root, Bounds3k b_k, Vector3f k2b) {
     Bounds3f b;
     for (int i = 0; i < 3; i++) {
-        Float dist = b_root.pMax[i] - b_root.pMin[i];
-        b.pMin[i] = (dist * b_k.min[i] / 255) + b.pMin[i];
-        b.pMax[i] = (dist * b_k.max[i] / 255) + b.pMin[i];
+        // k2b = dist / 255
+        b.pMin[i] = (k2b[i] * b_k.min[i]) + b_root.pMin[i];
+        b.pMax[i] = (k2b[i] * b_k.max[i]) + b_root.pMin[i];
     }
     return b;
+}
 
+struct BoundConversionFactors { Vector3f b2k; Vector3f k2b; };
+BoundConversionFactors CalcBoundConversionFactors(Bounds3f b) {
+    Vector3f b2k, k2b;
+    for (int i = 0; i < 3; i++) {
+        b2k[i] = 255 / (b.pMax[i] - b.pMin[i]);
+        k2b[i] = 1 / b2k[i];
+    }
+    return BoundConversionFactors{b2k, k2b};
 }
 
 ChildrenBuildInfo BVHChunkBFSAccel::GetChildrenBuildInfo(
@@ -79,10 +90,12 @@ ChildrenBuildInfo BVHChunkBFSAccel::GetChildrenBuildInfo(
     ChildrenBuildInfo cbi = ChildrenBuildInfo{};
     cbi.idx[0] = node_offset + 1;
     cbi.idx[1] = bvh->GetNodes()[node_offset].secondChildOffset;
+    BoundConversionFactors bcf = CalcBoundConversionFactors(b_root);
     for (int child = 0; child < 2; child++) {
         Bounds3f b_child = bvh->GetNodes()[cbi.idx[child]].bounds;
-        cbi.b_key[child] = FindBoundsKey(b_root, b_child);
-        cbi.b_comp[child] = FindCompressedBounds(b_root, cbi.b_key[child]);
+        cbi.b_key[child] = FindBoundsKey(b_root, b_child, bcf.b2k);
+        cbi.b_comp[child] = FindCompressedBounds(b_root, cbi.b_key[child], bcf.k2b);
+        // cbi.b_comp[child] = b_child;
     }
     return cbi;
 }
@@ -95,78 +108,90 @@ BVHChunkBFSAccel::BVHChunkBFSAccel(std::vector<std::shared_ptr<Primitive>> p,
       primitives(std::move(p)) {
     ProfilePhase _(Prof::AccelConstruction);
     // Let BVHAccel build BVH Structure
-    bvh = new BVHAccel(p, maxPrimsInNode, splitMethod);
+    printf("BVHBFS: Starting original BVH build!\n");
+    bvh = new BVHAccel(primitives, maxPrimsInNode, splitMethod);
     if (!bvh->GetNodes()) return;
+    printf("BVHBFS: Original BVH build done!\n");
     // Chunk struct for building the chunks
-    struct Chunk { uint32_t root_node_idx; Bounds3f b_root; };
-    uint32_t chunk_idx = 0;
-    std::queue<Chunk> chunk_q;
     bvh_chunks.push_back(BVHChunkBFS{});
-    std::vector<std::shared_ptr<Primitive>> orderedPrims;
-    // Build a full chunk within each iteration of the loop
-    while (!chunk_q.empty()) {
-        Chunk c = chunk_q.front();
-        // === Building Chunk ===
-        // Set meta information of chunk
-        bvh_chunks[chunk_idx].b_root = c.b_root;
-        bvh_chunks[chunk_idx].multipliers_offset = multipliers.size();
-        bvh_chunks[chunk_idx].primitive_offset = orderedPrims.size();
-        bvh_chunks[chunk_idx].child_chunk_offset = bvh_chunks.size();
-        // Make a node queue and push the root nodes 2 children
-        struct BVHChunkBFSNodeBuild { uint32_t node_idx; Bounds3f b_comp; Bounds3k b_key; };
-        std::queue<BVHChunkBFSNodeBuild> node_q;
-        ChildrenBuildInfo cbi = GetChildrenBuildInfo(c.b_root, c.root_node_idx);
-        for (int a = 0; a < 2; a++) 
-            node_q.push(BVHChunkBFSNodeBuild{cbi.idx[a], cbi.b_comp[a], cbi.b_key[a]});
-        // Initialize variables needed to fill bitfield
-        int chunk_fill = 1; // number of pairs of nodes processed and/or in queue
-        int nodes_processed = 0; // number of nodes already processed
-        bool firstLeafInChunk = true;
-        // Fill the bitfield of this chunk, processing one node per iteration
-        while (!node_q.empty()) {
-            // Variables for easier access to information
-            BVHChunkBFSNodeBuild build_node = node_q.front();
-            LinearBVHNode *node = &bvh->GetNodes()[build_node.node_idx];
-            bool is_inner_node = node->nPrimitives == 0;
-            // Find correct idx and bit position in bitfield
-            int idx = nodes_processed / bf_size;
-            int bit_pos = nodes_processed % bf_size;
-            // When starting a new index, make sure the initial value of the bitcode is 0
-            if (bit_pos == 0) bvh_chunks[chunk_idx].bitfield[idx] = (bf_type)0;
-            // Determine node type, and process accordingly
-            if (is_inner_node) {
-                bvh_chunks[chunk_idx].bitfield[idx] |= (bf_type)1 << bit_pos;
-                if (chunk_fill >= node_pairs_per_chunk) {
-                    // Chunk Ptr Inner Node
-                    chunk_q.push(Chunk{build_node.node_idx, node->bounds});
-                    bvh_chunks.push_back(BVHChunkBFS{});
-                } else {
-                    // Real Inner Node
-                    ChildrenBuildInfo cbi = GetChildrenBuildInfo(build_node.b_comp, build_node.node_idx);
-                    for (int a = 0; a < 2; a++) 
-                        node_q.push(BVHChunkBFSNodeBuild{cbi.idx[a], cbi.b_comp[a], cbi.b_key[a]});
-                    chunk_fill++;
-                }
+    printf("BVHBFS: Starting build!\n");
+    Recurse(0, 0, WorldBound());
+    printf("BVHBFS: Build done! Starting vis!\n");
+    // Visualisation:
+    lh_dump("bvh_vis_bfs.obj");
+}
+
+void BVHChunkBFSAccel::Recurse(uint32_t chunk_offset, uint32_t root_node_idx, Bounds3f b_root) {
+    struct Chunk { uint32_t root_node_idx; Bounds3f b_root; };
+    printf("Chunk %i\n", chunk_offset);
+    std::vector<Chunk> chunk_ptr_nodes;
+    // === Building Chunk ===
+    // Set meta information of chunk
+    bvh_chunks[chunk_offset].b_root = b_root;
+    bvh_chunks[chunk_offset].multipliers_offset = multipliers.size();
+    bvh_chunks[chunk_offset].primitive_offset = primitives.size();
+    bvh_chunks[chunk_offset].child_chunk_offset = bvh_chunks.size();
+    // Make a node queue and push the root nodes 2 children
+    struct BVHChunkBFSNodeBuild { uint32_t node_idx; Bounds3f b_comp; Bounds3k b_key; };
+    std::queue<BVHChunkBFSNodeBuild> node_q;
+    ChildrenBuildInfo cbi = GetChildrenBuildInfo(b_root, root_node_idx);
+    for (int i = 0; i < 2; i++) 
+        node_q.push(BVHChunkBFSNodeBuild{cbi.idx[i], cbi.b_comp[i], cbi.b_key[i]});
+    // Initialize variables needed to fill bitfield
+    int chunk_fill = 1; // number of pairs of nodes processed and/or in queue
+    int nodes_processed = 0; // number of nodes already processed
+    bool firstLeafInChunk = true;
+    // Fill the bitfield of this chunk, processing one node per iteration
+    while (!node_q.empty()) {
+        // Variables for easier access to information
+        BVHChunkBFSNodeBuild build_node = node_q.front();
+        LinearBVHNode *node = &bvh->GetNodes()[build_node.node_idx];
+        bool is_inner_node = node->nPrimitives == 0;
+        // Find correct idx and bit position in bitfield
+        int idx = nodes_processed / bf_size;
+        int bit_pos = nodes_processed % bf_size;
+        // When starting a new index, make sure the initial value of the bitcode is 0
+        if (bit_pos == 0) bvh_chunks[chunk_offset].bitfield[idx] = (bf_type)0;
+        // Determine node type, and process accordingly
+        if (is_inner_node) {
+            bvh_chunks[chunk_offset].bitfield[idx] |= ((bf_type)1 << bit_pos);
+            if (chunk_fill < node_pairs_per_chunk) {
+                // Real Inner Node
+                Bounds3f root_bounds = (relative_keys) ? build_node.b_comp : b_root;
+                ChildrenBuildInfo cbi = GetChildrenBuildInfo(root_bounds, build_node.node_idx);
+                for (int i = 0; i < 2; i++) 
+                    node_q.push(BVHChunkBFSNodeBuild{cbi.idx[i], cbi.b_comp[i], cbi.b_key[i]});
+                chunk_fill++;
             } else {
-                // Leaf Node
-                if (firstLeafInChunk) {
-                    sizes.push_back(0);
-                    firstLeafInChunk = false;
-                }
-                sizes.push_back(sizes.back() + node->nPrimitives);
-                for (int i = 0; i < node->nPrimitives; i++)
-                    orderedPrims.push_back(bvh->GetPrimitives()[node->primitivesOffset + i]);
+                // Chunk Ptr Inner Node
+                chunk_ptr_nodes.push_back(Chunk{build_node.node_idx, node->bounds});
+                bvh_chunks.push_back(BVHChunkBFS{});
             }
-            multipliers.push_back(build_node.b_key);
-            // Update node counter and -queue
-            nodes_processed++;
-            node_q.pop();
+        } else {
+            // Leaf Node
+            if (firstLeafInChunk) {
+                sizes.push_back(0);
+                firstLeafInChunk = false;
+            }
+            sizes.push_back(sizes.back() + node->nPrimitives);
+            for (int i = 0; i < node->nPrimitives; i++)
+                primitives.push_back(bvh->GetPrimitives()[node->primitivesOffset + i]);
         }
-        // Update chunk counter and -queue
-        chunk_idx++;
-        chunk_q.pop();
+        multipliers.push_back(build_node.b_key);
+        // Update node counter and -queue
+        nodes_processed++;
+        node_q.pop();
+    } // nodes_q
+    // Update chunk counter and -queue
+    total_nodes += nodes_processed;
+    int tn = total_nodes;
+    
+    for (int i = 0; i < chunk_ptr_nodes.size(); i++) {
+        Recurse(
+            bvh_chunks[chunk_offset].child_chunk_offset + i,
+            chunk_ptr_nodes[i].root_node_idx,
+            chunk_ptr_nodes[i].b_root);
     }
-    primitives.swap(orderedPrims);
 }
 
 Bounds3f BVHChunkBFSAccel::WorldBound() const {
@@ -195,7 +220,6 @@ std::shared_ptr<BVHChunkBFSAccel> CreateBVHChunkBFSAccelerator(
                 splitMethodName.c_str());
         splitMethod = SplitMethod::SAH;
     }
-
     int maxPrimsInNode = ps.FindOneInt("maxnodeprims", 4);
     return std::make_shared<BVHChunkBFSAccel>(std::move(prims), maxPrimsInNode, splitMethod);
 }
@@ -227,17 +251,54 @@ void BVHChunkBFSAccel::lh_dump_rec(FILE *f, uint32_t *vcnt_, uint32_t chunk_offs
 
     std::queue<Bounds3f> bounds_q;
     bounds_q.push(bounds);
+    BoundConversionFactors bcf = CalcBoundConversionFactors(bounds);
 
     int child_chunk_cnt = 0;
-    int current_pair_idx = 0;
 
-    int num_node_pairs = 1;
-    for (int idx = 0; idx < chunk_depth; idx++) {
-        for (bf_type pair = 0; pair < num_node_pairs; pair++) {
-            if (current_pair_idx++ >= num_node_pairs) break;
-
-            
+    int num_chunk_pairs = 1; // number of pairs of nodes in this chunk (at least 1)
+    for (int pair_id = 0; pair_id < node_pairs_per_bitfield; pair_id++) {
+        // If the chunk doesn't contain more nodes, stop
+        if (pair_id >= num_chunk_pairs) break;
+        // Basic information about where node is in bitfield
+        int bf_idx = (pair_id * 2) / bf_size;       // which idx in bitfield array
+        int pair_idx = pair_id % (bf_size / 2);     // how many-th pair inside single bitfield
+        for (int bit = 0; bit < 2; bit++) {
+            int node_id = 2 * pair_id + bit;        // how many-th node overall
+            int node_idx = node_id % bf_size;       // how many-th node inside single bitfield
+            bf_type one = (bf_type)1;               // macro
+            // Bound calculations
+            Bounds3k node_b_key = multipliers[c.multipliers_offset + node_id];
+            Bounds3f node_b_comp = FindCompressedBounds(bounds_q.front(), node_b_key, bcf.k2b);
+            // Process note according to node type
+            if (((c.bitfield[bf_idx] >> node_idx) & one) == one) {
+                // Inner Node
+                if (num_chunk_pairs < node_pairs_per_chunk) {
+                    // Real Inner Node
+                    if (relative_keys) bounds_q.push(node_b_comp);
+                    num_chunk_pairs++;
+                } else {
+                    // Chunk Ptr Inner Node
+                    lh_dump_rec(f, vcnt_, c.child_chunk_offset + child_chunk_cnt++, node_b_comp);
+                }
+            } 
+            // Vertices ausgeben
+            for(uint32_t i = 0; i < 8; i++) {
+                Float x = ((i & 1) == 0) ? node_b_comp.pMin.x : node_b_comp.pMax.x;
+                Float y = ((i & 2) == 0) ? node_b_comp.pMin.y : node_b_comp.pMax.y;
+                Float z = ((i & 4) == 0) ? node_b_comp.pMin.z : node_b_comp.pMax.z;
+                fprintf(f, "v %f %f %f\n", x, y, z);
+            }
+            // Vertex indices ausgeben
+            uint32_t vcnt = *vcnt_;
+            fprintf(f, "f %d %d %d %d\n", vcnt    , vcnt + 1, vcnt + 5, vcnt + 4);//bottom
+            fprintf(f, "f %d %d %d %d\n", vcnt + 2, vcnt + 3, vcnt + 7, vcnt + 6);//top
+            fprintf(f, "f %d %d %d %d\n", vcnt    , vcnt + 1, vcnt + 3, vcnt + 2);//front
+            fprintf(f, "f %d %d %d %d\n", vcnt + 4, vcnt + 5, vcnt + 7, vcnt + 6);//back
+            fprintf(f, "f %d %d %d %d\n", vcnt    , vcnt + 4, vcnt + 6, vcnt + 2);//left
+            fprintf(f, "f %d %d %d %d\n", vcnt + 1, vcnt + 5, vcnt + 7, vcnt + 3);//right
+            *vcnt_ += 8;
         }
+        if (relative_keys) bounds_q.pop();
     }
 }
 
