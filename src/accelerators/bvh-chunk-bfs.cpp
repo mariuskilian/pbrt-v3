@@ -211,10 +211,9 @@ void BVHChunkBFSAccel::Recurse(uint32_t chunk_offset, uint32_t root_node_idx,
         } else {
             // Leaf Node
             if (firstLeafInChunk) {
-                sizes.push_back(0);
+                sizes.push_back(node->nPrimitives);
                 firstLeafInChunk = false;
-            }
-            sizes.push_back(sizes.back() + node->nPrimitives);
+            } else sizes.push_back(sizes.back() + node->nPrimitives);
             for (int i = 0; i < node->nPrimitives; i++)
                 primitives.push_back(
                     bvh->GetPrimitives()[node->primitivesOffset + i]);
@@ -224,7 +223,6 @@ void BVHChunkBFSAccel::Recurse(uint32_t chunk_offset, uint32_t root_node_idx,
         nodes_processed++;
         node_q.pop();
     }  // nodes_q
-    // Update chunk counter and -queue
     total_nodes += nodes_processed;
 
     for (int i = 0; i < chunk_ptr_nodes.size(); i++) {
@@ -283,6 +281,7 @@ bool BVHChunkBFSAccel::Intersect(const Ray &ray,
     // Initialize node stack
     BVHChunkBFSNode node_stack[64];
     uint32_t node_stack_offset = 0;
+    if (!WorldBound().IntersectP(ray, invDir, dirIsNeg)) return hit;
     if (dirIsNeg[bvh->GetNodes()[0].axis]) {
         node_stack[node_stack_offset++] = BVHChunkBFSNode{0, 0};
         current_node = BVHChunkBFSNode{0, 1};
@@ -330,15 +329,18 @@ bool BVHChunkBFSAccel::Intersect(const Ray &ray,
                     current_node = BVHChunkBFSNode{next_chunk_offset, next_nodes_offset};
                 }
             } else {
+                // Leaf Node
                 uint32_t sizes_idx = current_chunk.sizes_offset + current_node.node_idx - rank;
-                uint32_t prim_start = current_chunk.primitive_offset + sizes[sizes_idx];
-                uint32_t prim_end = current_chunk.primitive_offset + sizes[sizes_idx + 1];
+                uint32_t prim_start = current_chunk.primitive_offset +
+                        ((current_node.node_idx == rank) ? 0 : sizes[sizes_idx - 1]);
+                uint32_t prim_end = current_chunk.primitive_offset + sizes[sizes_idx];
                 for (uint32_t i = prim_start; i < prim_end; i++)
                     if (primitives[i].get()->Intersect(ray, isect)) hit = true;
                 if (node_stack_offset == 0) break;
                 current_node = node_stack[--node_stack_offset];
             }
         } else {
+            // Didn't intersect the nodes bounds
             if (node_stack_offset == 0) break;
             current_node = node_stack[--node_stack_offset];
         }
@@ -349,6 +351,8 @@ bool BVHChunkBFSAccel::Intersect(const Ray &ray,
 bool BVHChunkBFSAccel::IntersectP(const Ray &ray) const {
     if (!bvh->GetNodes()) return false;
     ProfilePhase p(Prof::AccelIntersect);
+    SurfaceInteraction isect;
+    return Intersect(ray, &isect); // DEBUG
     Vector3f invDir(1 / ray.d.x, 1 / ray.d.y, 1 / ray.d.z);
     int dirIsNeg[3] = {invDir.x < 0, invDir.y < 0, invDir.z < 0};
     // Follow ray through BVH nodes to find primitive intersections
@@ -412,8 +416,9 @@ bool BVHChunkBFSAccel::IntersectP(const Ray &ray) const {
                 }
             } else {
                 uint32_t sizes_idx = current_chunk.sizes_offset + current_node.node_idx - rank;
-                uint32_t prim_start = current_chunk.primitive_offset + sizes[sizes_idx];
-                uint32_t prim_end = current_chunk.primitive_offset + sizes[sizes_idx + 1];
+                uint32_t prim_start = current_chunk.primitive_offset +
+                        ((current_node.node_idx == rank) ? 0 : sizes[sizes_idx - 1]);
+                uint32_t prim_end = current_chunk.primitive_offset + sizes[sizes_idx];
                 for (uint32_t i = prim_start; i < prim_end; i++)
                     if (primitives[i].get()->IntersectP(ray)) return true;
                 if (node_stack_offset == 0) break;
