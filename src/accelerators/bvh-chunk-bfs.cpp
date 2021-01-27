@@ -43,6 +43,8 @@
 #include "paramset.h"
 #include "stats.h"
 
+#include <bitset> //debug
+
 #if defined(_MSC_VER)
 #include "intrin.h"
 #define POPCNT __popcnt64
@@ -54,6 +56,7 @@
 namespace pbrt {
 
 STAT_COUNTER("BVH-BFS/Total nodes", total_nodes);
+STAT_COUNTER("BVH-BFS/# Primitive Intersect", num_prim_isect);
 
 struct alignas(64) BVHChunkBFSAccel::BVHChunkBFS {
     Bounds3f b_root;
@@ -65,13 +68,13 @@ struct alignas(64) BVHChunkBFSAccel::BVHChunkBFS {
 };
 
 uint32_t BVHChunkBFSAccel::Rank(bf_type bitfield[chunk_depth], int n) const {
-    int idx = n;
-    int count = 0;
+    uint32_t count = 0;
     bf_type bits;
     for (int i = 0; i < chunk_depth; i++) {
         bits = bitfield[i];
-        if ((idx -= bf_size) < 0) break;
+        if (n < bf_size) break;
         count += POPCNT(bits);
+        n -= bf_size;
     }
     return count + POPCNT(bits & (((bf_type)1 << n) - (bf_type)1));
 }
@@ -336,6 +339,7 @@ bool BVHChunkBFSAccel::Intersect(const Ray &ray,
                 uint32_t prim_end = current_chunk.primitive_offset + sizes[sizes_idx];
                 for (uint32_t i = prim_start; i < prim_end; i++)
                     if (primitives[i].get()->Intersect(ray, isect)) hit = true;
+                num_prim_isect += prim_end - prim_start;
                 if (node_stack_offset == 0) break;
                 current_node = node_stack[--node_stack_offset];
             }
@@ -351,8 +355,8 @@ bool BVHChunkBFSAccel::Intersect(const Ray &ray,
 bool BVHChunkBFSAccel::IntersectP(const Ray &ray) const {
     if (!bvh->GetNodes()) return false;
     ProfilePhase p(Prof::AccelIntersect);
-    SurfaceInteraction isect;
-    return Intersect(ray, &isect); // DEBUG
+    //SurfaceInteraction isect;
+    //return Intersect(ray, &isect); // DEBUG
     Vector3f invDir(1 / ray.d.x, 1 / ray.d.y, 1 / ray.d.z);
     int dirIsNeg[3] = {invDir.x < 0, invDir.y < 0, invDir.z < 0};
     // Follow ray through BVH nodes to find primitive intersections
