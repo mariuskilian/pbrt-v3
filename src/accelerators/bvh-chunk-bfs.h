@@ -50,6 +50,7 @@ const bool relative_keys = false;
 
 typedef BVHAccel::SplitMethod SplitMethod;
 struct Bounds3k { uint8_t min[3]; uint8_t max[3]; };
+struct BVHBFSNodeInfo { Bounds3k bk; uint8_t axis; }; //IDEA: take 2 bits of non-axis min to save axis. 
 struct ChildrenBuildInfo { uint32_t idx[2]; Bounds3f b_comp[2]; Bounds3k b_key[2]; };
 
 // BVHChunkBFSAccel Forward Declarations
@@ -76,6 +77,7 @@ class BVHChunkBFSAccel : public Aggregate {
     static const int chunk_depth = 3;
     static const int node_pairs_per_chunk = bf_size * chunk_depth / 2;
     static const int node_pairs_per_bitfield = node_pairs_per_chunk / chunk_depth;
+    int num_chunk_layers = 0;
 
     // BVHAccel Private Data
     const int maxPrimsInNode;
@@ -83,14 +85,18 @@ class BVHChunkBFSAccel : public Aggregate {
     std::vector<std::shared_ptr<Primitive>> primitives;
 
     std::vector<BVHChunkBFS> bvh_chunks;
+    std::vector<BVHBFSNodeInfo> node_info;
+    std::vector<uint16_t> sizes;
 
     BVHAccel *bvh;
 
-    Bounds3k FindBoundsKey(Bounds3f b_root, Bounds3f b, Vector3f factor);
-    Bounds3f FindCompressedBounds(Bounds3f b_root, Bounds3k b_k, Vector3f factor);
-    ChildrenBuildInfo GetChildrenBuildInfo(Bounds3f b_root, uint32_t node_offset);
+    uint32_t Rank(bf_type bitfield[chunk_depth], int n) const;
 
-    void Recurse(uint32_t chunk_offset, uint32_t root_node_idx, Bounds3f b_root);
+    Bounds3k FindBoundsKey(Bounds3f b_root, Bounds3f b, Vector3f factor) const;
+    Bounds3f FindCompressedBounds(Bounds3f b_root, Bounds3k b_k, Vector3f factor) const;
+    ChildrenBuildInfo GetChildrenBuildInfo(Bounds3f b_root, uint32_t node_offset) const;
+
+    void Recurse(uint32_t chunk_offset, uint32_t root_node_idx, Bounds3f b_root, int chunk_layer);
 
     void lh_dump(const char *path, bool dfs = false);
     void lh_dump_rec(FILE *f, uint32_t *vcnt_, uint32_t chunk_offset, Bounds3f bounds);

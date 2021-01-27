@@ -77,7 +77,7 @@ class BVHAccel : public Aggregate {
     bool IntersectP(const Ray &ray) const;
 
     LinearBVHNode* GetNodes() { return nodes; }
-    std::vector<std::shared_ptr<Primitive>> GetPrimitives() { return primitives; }
+    std::vector<std::shared_ptr<Primitive>> &GetPrimitives() { return primitives; }
 
   private:
     // BVHAccel Private Methods
