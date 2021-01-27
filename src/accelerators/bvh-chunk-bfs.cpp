@@ -138,8 +138,8 @@ BVHChunkBFSAccel::BVHChunkBFSAccel(std::vector<std::shared_ptr<Primitive>> p,
     if (!bvh->GetNodes()) return;
     printf("BVHBFS: Original BVH build done!\n");
     // Chunk struct for building the chunks
-    bvh_chunks.push_back(BVHChunkBFS{});
     printf("BVHBFS: Starting build!\n");
+    bvh_chunks.push_back(BVHChunkBFS{});
     total_nodes += 1;
     Recurse(0, 0, WorldBound(), 1);
     printf("BVHBFS: Build done!\n");
@@ -163,6 +163,8 @@ void BVHChunkBFSAccel::Recurse(uint32_t chunk_offset, uint32_t root_node_idx,
     bvh_chunks[chunk_offset].sizes_offset = sizes.size();
     bvh_chunks[chunk_offset].primitive_offset = primitives.size();
     bvh_chunks[chunk_offset].child_chunk_offset = bvh_chunks.size();
+    for (int i = 0; i < chunk_depth; i++)
+        bvh_chunks[chunk_offset].bitfield[i] = (bf_type)0;
     // Make a node queue and push the root nodes 2 children
     struct BVHChunkBFSNodeBuild {
         uint32_t node_idx;
@@ -187,9 +189,6 @@ void BVHChunkBFSAccel::Recurse(uint32_t chunk_offset, uint32_t root_node_idx,
         // Find correct idx and bit position in bitfield
         int idx = nodes_processed / bf_size;
         int bit_pos = nodes_processed % bf_size;
-        // When starting a new index, make sure the initial value of the bitcode
-        // is 0
-        if (bit_pos == 0) bvh_chunks[chunk_offset].bitfield[idx] = (bf_type)0;
         // Determine node type, and process accordingly
         if (is_inner_node) {
             bvh_chunks[chunk_offset].bitfield[idx] |= ((bf_type)1 << bit_pos);
