@@ -44,6 +44,8 @@
 #elif defined(__clang__)
     #include "popcntintrin.h"
     #define POPCNT _mm_popcnt_u64
+#elif defined (__linux__)
+    #define POPCNT __builtin_popcount
 #endif
 
 namespace pbrt {
