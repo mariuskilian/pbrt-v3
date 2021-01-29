@@ -50,7 +50,7 @@
 #include "popcntintrin.h"
 #define POPCNT _mm_popcnt_u64
 #elif defined (__linux__)
-#define POPCNT __builtin_popcount
+#define POPCNT __builtin_popcountll
 #endif
 
 namespace pbrt {
