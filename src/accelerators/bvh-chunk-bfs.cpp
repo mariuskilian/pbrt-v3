@@ -43,20 +43,26 @@
 #include "paramset.h"
 #include "stats.h"
 
-#include <bitset> //debug
-
 #if defined(_MSC_VER)
 #include "intrin.h"
 #define POPCNT __popcnt64
 #elif defined(__clang__)
 #include "popcntintrin.h"
 #define POPCNT _mm_popcnt_u64
+#elif defined (__linux__)
+#define POPCNT __builtin_popcount
 #endif
 
 namespace pbrt {
 
-STAT_COUNTER("BVH-BFS/Total nodes", total_nodes);
+STAT_COUNTER("BVH-BFS/Total nodes", num_total_nodes);
+STAT_COUNTER("BVH-BFS/Chunks", num_chunks);
+STAT_COUNTER("BVH-BFS/Real Inner nodes", num_real_inner_nodes);
+STAT_COUNTER("BVH-BFS/Chunk-Ptr Inner Nodes", num_chunk_ptr_nodes);
+STAT_COUNTER("BVH-BFS/Total inner nodes", num_inner_nodes);
+STAT_COUNTER("BVH-BFS/Leaf nodes", num_leaf_nodes);
 STAT_COUNTER("BVH-BFS/# Primitive Intersect", num_prim_isect);
+STAT_COUNTER("BVH-BFS/leaf prims", leaf_prim_cnt);
 
 struct alignas(64) BVHChunkBFSAccel::BVHChunkBFS {
     Bounds3f b_root;
@@ -84,8 +90,10 @@ Bounds3k BVHChunkBFSAccel::FindBoundsKey(Bounds3f b_root, Bounds3f b,
     Bounds3k b_k = Bounds3k{};
     for (int i = 0; i < 3; i++) {
         // b2k = 255 / dist
-        b_k.min[i] = (uint8_t)floor(b2k[i] * (b.pMin[i] - b_root.pMin[i]));
-        b_k.max[i] = (uint8_t)ceil(b2k[i] * (b.pMax[i] - b_root.pMin[i]));
+        Float min = (min > 255) ? 255 : floor(b2k[i] * (b.pMin[i] - b_root.pMin[i]));
+        Float max = (max < 0) ? 0 : ceil(b2k[i] * (b.pMax[i] - b_root.pMin[i]));
+        b_k.min[i] = (uint8_t)min;
+        b_k.max[i] = (uint8_t)max;
     }
     return b_k;
 }
@@ -108,7 +116,7 @@ struct BoundConversionFactors {
 BoundConversionFactors CalcBoundConversionFactors(Bounds3f b) {
     Vector3f b2k, k2b;
     for (int i = 0; i < 3; i++) {
-        b2k[i] = 255 / (b.pMax[i] - b.pMin[i]);
+        b2k[i] = 255 / ((b.pMax[i] != b.pMin[i]) ? (b.pMax[i] - b.pMin[i]) : 1);
         k2b[i] = 1 / b2k[i];
     }
     return BoundConversionFactors{b2k, k2b};
@@ -143,12 +151,19 @@ BVHChunkBFSAccel::BVHChunkBFSAccel(std::vector<std::shared_ptr<Primitive>> p,
     // Chunk struct for building the chunks
     printf("BVHBFS: Starting build!\n");
     bvh_chunks.push_back(BVHChunkBFS{});
-    total_nodes += 1;
+    num_chunks++;
+    // We count the initial root node as a chunk pointer inner node
+    num_total_nodes++;
+    num_inner_nodes++;
+    num_chunk_ptr_nodes++;
     Recurse(0, 0, WorldBound(), 1);
     printf("BVHBFS: Build done!\n");
-    // printf("Starting vis!\n");
     // Visualisation:
+    // printf("BVHBFS: Starting vis!\n");
     // lh_dump("bvh_vis_bfs.obj");
+    // printf("BVHBFS: Vis BFS done, starting Vis DFS\n");
+    // lh_dump("bvh_vis_dfs.obj", true);
+    // printf("BVHBFS: Vis done!\n");
 }
 
 void BVHChunkBFSAccel::Recurse(uint32_t chunk_offset, uint32_t root_node_idx,
@@ -205,12 +220,16 @@ void BVHChunkBFSAccel::Recurse(uint32_t chunk_offset, uint32_t root_node_idx,
                     node_q.push(BVHChunkBFSNodeBuild{cbi.idx[i], cbi.b_comp[i],
                                                      cbi.b_key[i]});
                 chunk_fill++;
+                num_real_inner_nodes++;
             } else {
                 // Chunk Ptr Inner Node
                 chunk_ptr_nodes.push_back(
-                    Chunk{build_node.node_idx, node->bounds});
+                    Chunk{build_node.node_idx, build_node.b_comp});
                 bvh_chunks.push_back(BVHChunkBFS{});
+                num_chunk_ptr_nodes++;
+                num_chunks++;
             }
+            num_inner_nodes++;
         } else {
             // Leaf Node
             if (firstLeafInChunk) {
@@ -218,15 +237,15 @@ void BVHChunkBFSAccel::Recurse(uint32_t chunk_offset, uint32_t root_node_idx,
                 firstLeafInChunk = false;
             } else sizes.push_back(sizes.back() + node->nPrimitives);
             for (int i = 0; i < node->nPrimitives; i++)
-                primitives.push_back(
-                    bvh->GetPrimitives()[node->primitivesOffset + i]);
+                primitives.push_back(bvh->GetPrimitives()[node->primitivesOffset + i]);
+            num_leaf_nodes++;
         }
         node_info.push_back(BVHBFSNodeInfo{build_node.b_key, node->axis});
         // Update node counter and -queue
         nodes_processed++;
         node_q.pop();
+        num_total_nodes++;
     }  // nodes_q
-    total_nodes += nodes_processed;
 
     for (int i = 0; i < chunk_ptr_nodes.size(); i++) {
         Recurse(bvh_chunks[chunk_offset].child_chunk_offset + i,
@@ -339,7 +358,6 @@ bool BVHChunkBFSAccel::Intersect(const Ray &ray,
                 uint32_t prim_end = current_chunk.primitive_offset + sizes[sizes_idx];
                 for (uint32_t i = prim_start; i < prim_end; i++)
                     if (primitives[i].get()->Intersect(ray, isect)) hit = true;
-                num_prim_isect += prim_end - prim_start;
                 if (node_stack_offset == 0) break;
                 current_node = node_stack[--node_stack_offset];
             }
@@ -354,9 +372,7 @@ bool BVHChunkBFSAccel::Intersect(const Ray &ray,
 
 bool BVHChunkBFSAccel::IntersectP(const Ray &ray) const {
     if (!bvh->GetNodes()) return false;
-    ProfilePhase p(Prof::AccelIntersect);
-    //SurfaceInteraction isect;
-    //return Intersect(ray, &isect); // DEBUG
+    ProfilePhase p(Prof::AccelIntersectP);
     Vector3f invDir(1 / ray.d.x, 1 / ray.d.y, 1 / ray.d.z);
     int dirIsNeg[3] = {invDir.x < 0, invDir.y < 0, invDir.z < 0};
     // Follow ray through BVH nodes to find primitive intersections
@@ -372,6 +388,7 @@ bool BVHChunkBFSAccel::IntersectP(const Ray &ray) const {
     // Initialize node stack
     BVHChunkBFSNode node_stack[64];
     uint32_t node_stack_offset = 0;
+    if (!WorldBound().IntersectP(ray, invDir, dirIsNeg)) return false;
     if (dirIsNeg[bvh->GetNodes()[0].axis]) {
         node_stack[node_stack_offset++] = BVHChunkBFSNode{0, 0};
         current_node = BVHChunkBFSNode{0, 1};
@@ -419,6 +436,7 @@ bool BVHChunkBFSAccel::IntersectP(const Ray &ray) const {
                     current_node = BVHChunkBFSNode{next_chunk_offset, next_nodes_offset};
                 }
             } else {
+                // Leaf Node
                 uint32_t sizes_idx = current_chunk.sizes_offset + current_node.node_idx - rank;
                 uint32_t prim_start = current_chunk.primitive_offset +
                         ((current_node.node_idx == rank) ? 0 : sizes[sizes_idx - 1]);
@@ -429,6 +447,7 @@ bool BVHChunkBFSAccel::IntersectP(const Ray &ray) const {
                 current_node = node_stack[--node_stack_offset];
             }
         } else {
+            // Didn't intersect the nodes bounds
             if (node_stack_offset == 0) break;
             current_node = node_stack[--node_stack_offset];
         }
@@ -451,6 +470,25 @@ void BVHChunkBFSAccel::lh_dump_rec(FILE *f, uint32_t *vcnt_,
                                    uint32_t chunk_offset, Bounds3f bounds) {
     BVHChunkBFS c = bvh_chunks[chunk_offset];
 
+    if (chunk_offset == 0) {
+        // Ver+= 8;tices ausgeben
+        for (uint32_t i = 0; i < 8; i++) {
+            Float x = ((i & 1) == 0) ? WorldBound().pMin.x : WorldBound().pMax.x;
+            Float y = ((i & 2) == 0) ? WorldBound().pMin.y : WorldBound().pMax.y;
+            Float z = ((i & 4) == 0) ? WorldBound().pMin.z : WorldBound().pMax.z;
+            fprintf(f, "v %f %f %f\n", x, y, z);
+        }
+        // Vertex indices ausgeben
+        uint32_t vcnt = *vcnt_;
+        fprintf(f, "f %d %d %d %d\n", vcnt, vcnt + 1, vcnt + 5, vcnt + 4);  // bottom
+        fprintf(f, "f %d %d %d %d\n", vcnt + 2, vcnt + 3, vcnt + 7, vcnt + 6);  // top
+        fprintf(f, "f %d %d %d %d\n", vcnt, vcnt + 1, vcnt + 3, vcnt + 2);  // front
+        fprintf(f, "f %d %d %d %d\n", vcnt + 4, vcnt + 5, vcnt + 7, vcnt + 6);  // back
+        fprintf(f, "f %d %d %d %d\n", vcnt, vcnt + 4, vcnt + 6, vcnt + 2);  // left
+        fprintf(f, "f %d %d %d %d\n", vcnt + 1, vcnt + 5, vcnt + 7, vcnt + 3);  // right
+        *vcnt_ += 8;
+    }
+
     std::queue<Bounds3f> bounds_q;
     bounds_q.push(bounds);
     BoundConversionFactors bcf = CalcBoundConversionFactors(bounds);
@@ -470,7 +508,7 @@ void BVHChunkBFSAccel::lh_dump_rec(FILE *f, uint32_t *vcnt_,
             int node_id = 2 * pair_id + bit;  // how many-th node overall
             int node_idx =
                 node_id % bf_size;  // how many-th node inside single bitfield
-            bf_type one = (bf_type)1;  // macro
+            const bf_type one = (bf_type)1;  // macro
             // Bound calculations
             BVHBFSNodeInfo ni = node_info[c.node_info_offset + node_id];
             Bounds3f node_b_comp =
@@ -487,7 +525,14 @@ void BVHChunkBFSAccel::lh_dump_rec(FILE *f, uint32_t *vcnt_,
                     lh_dump_rec(f, vcnt_,
                                 c.child_chunk_offset + child_chunk_cnt++,
                                 node_b_comp);
+                    node_b_comp = bvh_chunks[c.child_chunk_offset + child_chunk_cnt].b_root;
                 }
+            } else {
+                uint32_t rank = Rank(c.bitfield, node_idx);
+                uint32_t sizes_idx = c.sizes_offset + node_idx - rank;
+                uint32_t prim_start = (node_idx == rank) ? 0 : sizes[sizes_idx - 1];
+                uint32_t prim_end = sizes[sizes_idx];
+                leaf_prim_cnt += prim_end - prim_start;
             }
             // Vertices ausgeben
             for (uint32_t i = 0; i < 8; i++) {
@@ -521,7 +566,102 @@ void BVHChunkBFSAccel::lh_dump_rec(FILE *f, uint32_t *vcnt_,
 
 void BVHChunkBFSAccel::lh_dump_rec_dfs(FILE *f, uint32_t *vcnt_,
                                        uint32_t chunk_offset, Bounds3f bounds) {
+    // Follow ray through BVH nodes to find primitive intersections
+    struct BVHChunkBFSNode {
+        uint32_t chunk_idx;
+        uint32_t node_idx;
+    };
+    // Ver+= 8;tices ausgeben
+    for (uint32_t i = 0; i < 8; i++) {
+        Float x = ((i & 1) == 0) ? WorldBound().pMin.x : WorldBound().pMax.x;
+        Float y = ((i & 2) == 0) ? WorldBound().pMin.y : WorldBound().pMax.y;
+        Float z = ((i & 4) == 0) ? WorldBound().pMin.z : WorldBound().pMax.z;
+        fprintf(f, "v %f %f %f\n", x, y, z);
+    }
+    // Vertex indices ausgeben
+    uint32_t vcnt = *vcnt_;
+    fprintf(f, "f %d %d %d %d\n", vcnt, vcnt + 1, vcnt + 5, vcnt + 4);  // bottom
+    fprintf(f, "f %d %d %d %d\n", vcnt + 2, vcnt + 3, vcnt + 7, vcnt + 6);  // top
+    fprintf(f, "f %d %d %d %d\n", vcnt, vcnt + 1, vcnt + 3, vcnt + 2);  // front
+    fprintf(f, "f %d %d %d %d\n", vcnt + 4, vcnt + 5, vcnt + 7, vcnt + 6);  // back
+    fprintf(f, "f %d %d %d %d\n", vcnt, vcnt + 4, vcnt + 6, vcnt + 2);  // left
+    fprintf(f, "f %d %d %d %d\n", vcnt + 1, vcnt + 5, vcnt + 7, vcnt + 3);  // right
+    *vcnt_ += 8;
+    // Variables that update whenever a new chunk is entered
+    uint32_t current_chunk_idx = 99;  // Set to non-0 value to trigger variable updates in first iteration
+    BVHChunkBFS current_chunk;
+    BVHChunkBFSNode current_node;
+    Vector3f k2b;
+    // Initialize node stack
+    BVHChunkBFSNode node_stack[64];
+    uint32_t node_stack_offset = 0;
+    node_stack[node_stack_offset++] = BVHChunkBFSNode{0, 0};
+    current_node = BVHChunkBFSNode{0, 1};
+    while (true) {
+        // If the current node is in a different chunk than the previous node,
+        // update chunk
+        if (current_node.chunk_idx != current_chunk_idx) {
+            current_chunk_idx = current_node.chunk_idx;
+            current_chunk = bvh_chunks[current_chunk_idx];
+            k2b = CalcBoundConversionFactors(current_chunk.b_root).k2b;
+        }
 
+        uint32_t rank = Rank(current_chunk.bitfield, current_node.node_idx);
+
+        int idx = current_node.node_idx / bf_size;
+        int bit_pos = current_node.node_idx % bf_size;
+        bool is_inner_node = ((current_chunk.bitfield[idx] >> bit_pos) & (bf_type)1) == (bf_type)1;
+
+        const BVHBFSNodeInfo *ni = &node_info[current_chunk.node_info_offset + current_node.node_idx];
+        Bounds3f b_node = FindCompressedBounds(current_chunk.b_root, ni->bk, k2b);
+        if (is_inner_node) {
+            // Update rank to include current node
+            rank += 1;
+            // Determine next chunk offset and next nodes offset
+            uint32_t next_chunk_offset;
+            uint32_t next_nodes_offset;
+            if (rank < node_pairs_per_chunk) {
+                next_chunk_offset = chunk_offset;
+                next_nodes_offset = 2 * rank;
+            } else {
+                next_chunk_offset = current_chunk.child_chunk_offset + rank - node_pairs_per_chunk;
+                next_nodes_offset = 0;
+                b_node = bvh_chunks[next_chunk_offset].b_root;
+            }
+            // Add nodes to stack depending on which axis was used to split BVH
+            node_stack[node_stack_offset++] = BVHChunkBFSNode{next_chunk_offset, next_nodes_offset};
+            current_node = BVHChunkBFSNode{next_chunk_offset, next_nodes_offset + 1};
+        }
+        // Vertices ausgeben
+        for (uint32_t i = 0; i < 8; i++) {
+            Float x =
+                ((i & 1) == 0) ? b_node.pMin.x : b_node.pMax.x;
+            Float y =
+                ((i & 2) == 0) ? b_node.pMin.y : b_node.pMax.y;
+            Float z =
+                ((i & 4) == 0) ? b_node.pMin.z : b_node.pMax.z;
+            fprintf(f, "v %f %f %f\n", x, y, z);
+        }
+        // Vertex indices ausgeben
+        uint32_t vcnt = *vcnt_;
+        fprintf(f, "f %d %d %d %d\n", vcnt, vcnt + 1, vcnt + 5,
+                vcnt + 4);  // bottom
+        fprintf(f, "f %d %d %d %d\n", vcnt + 2, vcnt + 3, vcnt + 7,
+                vcnt + 6);  // top
+        fprintf(f, "f %d %d %d %d\n", vcnt, vcnt + 1, vcnt + 3,
+                vcnt + 2);  // front
+        fprintf(f, "f %d %d %d %d\n", vcnt + 4, vcnt + 5, vcnt + 7,
+                vcnt + 6);  // back
+        fprintf(f, "f %d %d %d %d\n", vcnt, vcnt + 4, vcnt + 6,
+                vcnt + 2);  // left
+        fprintf(f, "f %d %d %d %d\n", vcnt + 1, vcnt + 5, vcnt + 7,
+                vcnt + 3);  // right
+        *vcnt_ += 8;
+        if (!is_inner_node) {
+            if (node_stack_offset == 0) break;
+            current_node = node_stack[--node_stack_offset];
+        }
+    }
 }
 
 }  // namespace pbrt
