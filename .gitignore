@@ -1,10 +1,12 @@
 *~
 build
+scenes
+evaluation/results
 src/build
 src/bin
 src/objs
-scenes
 *.obj
+*.exr
 .sconsign.dblite
 .vscode
 .DS_Store

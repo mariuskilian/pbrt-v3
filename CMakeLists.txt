@@ -4,6 +4,113 @@
 
 CMAKE_MINIMUM_REQUIRED ( VERSION 3.1.0 )
 
+# ==================================================
+# ==================================================
+# ============== START CUSTOM SECTION ==============
+# ==================================================
+# ==================================================
+
+  # OUTLINE:
+    # 1. Define the custom Variables
+    # 2. Define accepted values
+    # 3. Set default value if nothing is specified
+    # 4. Check if current value is valid, else set default
+    # 5. Print all custom options
+    # 6. [End of CMakeLists.txt] Remove from CMake Cache
+
+  # ==============================
+  # 1. Define the custom Variables and their default values
+  # ==============================
+    ADD_DEFINITIONS(-DCOUNT_STATS="${COUNT_STATS}")
+    SET(DEF_COUNT_STATS False)
+    
+    ADD_DEFINITIONS(-DREL_KEYS="${REL_KEYS}")
+    SET(DEF_REL_KEYS False)
+
+    ADD_DEFINITIONS(-DBF_SIZE="${BF_SIZE}")
+    SET(DEF_BF_SIZE 64)
+
+    ADD_DEFINITIONS(-DCHUNK_SIZE="${CHUNK_SIZE}")
+    SET(DEF_CHUNK_SIZE 64)
+  # ------------------------------
+
+  # ==============================
+  # 2. Define accepted values and default values
+  # ==============================
+    SET(_BOOL "True;False")
+    SET(_BF_SIZE "8;16;32;64")
+    SET(_CHUNK_SIZE "64;128")
+  # ------------------------------
+
+  # ==============================
+  # 3. Set default values if nothing was specified
+  # ==============================
+    IF(NOT COUNT_STATS)
+      SET(COUNT_STATS ${DEF_COUNT_STATS})
+    ENDIF()
+
+    IF(NOT REL_KEYS)
+      SET(REL_KEYS ${DEF_REL_KEYS})
+    ENDIF()
+
+    IF(NOT BF_SIZE)
+      SET(BF_SIZE ${DEF_BF_SIZE})
+    ENDIF()
+
+    IF(NOT CHUNK_SIZE)
+      SET(CHUNK_SIZE ${DEF_CHUNK_SIZE})
+    ENDIF()
+  # ------------------------------ 
+
+  # ==============================
+  # 4. Check if current value is valid, else set default
+  # ==============================
+    MESSAGE("\n*** *** *** ***")
+
+    LIST(FIND _BOOL "${COUNT_STATS}" _IDX)
+    IF(${_IDX} EQUAL -1)
+      SET(COUNT_STATS ${DEF_COUNT_STATS})
+      MESSAGE("ERROR: INVALID INPUT. Setting default value for COUNT_STATS")
+    ENDIF()
+
+    LIST(FIND _BOOL "${REL_KEYS}" _IDX)
+    IF(${_IDX} EQUAL -1)
+      SET(REL_KEYS ${DEF_REL_KEYS})
+      MESSAGE("ERROR: INVALID INPUT. Setting default value for REL_KEYS")
+    ENDIF()
+
+    LIST(FIND _BF_SIZE "${BF_SIZE}" _IDX)
+    IF(${_IDX} EQUAL -1)
+      SET(BF_SIZE ${DEF_BF_SIZE})
+      MESSAGE("ERROR: INVALID INPUT. Setting default value for BF_SIZE")
+    ENDIF()
+
+    LIST(FIND _CHUNK_SIZE "${CHUNK_SIZE}" _IDX)
+    IF(${_IDX} EQUAL -1)
+      SET(CHUNK_SIZE ${DEF_CHUNK_SIZE})
+      MESSAGE("ERROR: INVALID INPUT. Setting default value for CHUNK_SIZE")
+    ENDIF()
+
+    MESSAGE("*** *** *** ***")
+  # ------------------------------
+
+  # ==============================
+  # 5. Print all custom options
+  # ==============================
+    MESSAGE("COUNT_STATS=${COUNT_STATS}")
+    MESSAGE("REL_KEYS=${REL_KEYS}")
+    MESSAGE("BF_SIZE=${BF_SIZE}\t\t[Bits]")
+    MESSAGE("CHUNK_SIZE=${CHUNK_SIZE}\t\t[Bytes]")
+    MESSAGE("")
+  # ------------------------------
+
+# ==================================================
+# ==================================================
+# =============== END CUSTOM SECTION ===============
+# ==================================================
+# ==================================================
+
+
 # For sanitizers
 SET (CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake" ${CMAKE_MODULE_PATH})
 
@@ -579,3 +686,14 @@ INSTALL ( TARGETS
   DESTINATION
   lib
   )
+
+
+# ==============================
+# 6. Remove from CMake Cache, so next time, if no value
+#     is specified, the default value is taken again
+# ==============================
+  UNSET(COUNT_STATS CACHE)
+  UNSET(REL_KEYS CACHE)
+  UNSET(BF_SIZE CACHE)
+  UNSET(CHUNK_SIZE CACHE)
+# ------------------------------

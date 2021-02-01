@@ -158,6 +158,7 @@ BVHChunkBFSAccel::BVHChunkBFSAccel(std::vector<std::shared_ptr<Primitive>> p,
     num_chunk_ptr_nodes++;
     Recurse(0, 0, WorldBound(), 1);
     printf("BVHBFS: Build done!\n");
+    printf("BVHBFS: %s\n", BF_SIZE);
     // Visualisation:
     // printf("BVHBFS: Starting vis!\n");
     // lh_dump("bvh_vis_bfs.obj");
