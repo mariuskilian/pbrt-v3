@@ -45,11 +45,9 @@
 
 namespace pbrt {
 
-const int MAX_DEPTH = 15; //15
-const int MAX_PRIMS = 32; //30
-
-const Float PRM_THRESH = 0.9;
-const Float VOL_THRESH = 1;
+static int MAX_PRIMS;
+static Float PRM_THRESH;
+static Float VOL_THRESH;
 
 // Change this for different type
 typedef uint64_t BITFIELD_TYPE;
@@ -80,7 +78,7 @@ class OctreeBasicAccel : public Aggregate {
   public:
     // KdTreeAccel Public Methods
     OctreeBasicAccel();
-    OctreeBasicAccel(std::vector<std::shared_ptr<Primitive>> p);
+    OctreeBasicAccel(std::vector<std::shared_ptr<Primitive>> p, int maxPrims = 32, float prm_thresh = 0.9, float vol_thresh = 0.9);
     Bounds3f WorldBound() const { return wb; }
     std::vector<uint32_t> &Nodes() { return nodes; }
     std::vector<uint32_t> &Sizes() { return sizes; }

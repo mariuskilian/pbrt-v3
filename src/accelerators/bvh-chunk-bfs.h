@@ -46,7 +46,7 @@
 
 namespace pbrt {
 
-const bool relative_keys = false;
+const bool relative_keys = false;//strcmp(REL_KEYS, "False");
 
 typedef BVHAccel::SplitMethod SplitMethod;
 struct Bounds3k { uint8_t min[3]; uint8_t max[3]; };
@@ -90,7 +90,7 @@ class BVHChunkBFSAccel : public Aggregate {
 
     BVHAccel *bvh;
 
-    uint32_t Rank(bf_type bitfield[chunk_depth], int n) const;
+    uint32_t Rank(const bf_type bitfield[chunk_depth], int n) const;
 
     Bounds3k FindBoundsKey(Bounds3f b_root, Bounds3f b, Vector3f factor) const;
     Bounds3f FindCompressedBounds(Bounds3f b_root, Bounds3k b_k, Vector3f factor) const;

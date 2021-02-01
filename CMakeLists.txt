@@ -11,39 +11,27 @@ CMAKE_MINIMUM_REQUIRED ( VERSION 3.1.0 )
 # ==================================================
 
   # OUTLINE:
-    # 1. Define the custom Variables
-    # 2. Define accepted values
-    # 3. Set default value if nothing is specified
-    # 4. Check if current value is valid, else set default
+    # 1. Define default values and accepted values
+    # 2. Set default value if nothing is specified
+    # 3. Check if current value is valid, else set default
+    # 4. Add definitions to C++ Files
     # 5. Print all custom options
-    # 6. [End of CMakeLists.txt] Remove from CMake Cache
 
   # ==============================
-  # 1. Define the custom Variables and their default values
+  # 1. Define default values and accepted values
   # ==============================
-    ADD_DEFINITIONS(-DCOUNT_STATS="${COUNT_STATS}")
     SET(DEF_COUNT_STATS False)
-    
-    ADD_DEFINITIONS(-DREL_KEYS="${REL_KEYS}")
     SET(DEF_REL_KEYS False)
-
-    ADD_DEFINITIONS(-DBF_SIZE="${BF_SIZE}")
     SET(DEF_BF_SIZE 64)
-
-    ADD_DEFINITIONS(-DCHUNK_SIZE="${CHUNK_SIZE}")
     SET(DEF_CHUNK_SIZE 64)
-  # ------------------------------
 
-  # ==============================
-  # 2. Define accepted values and default values
-  # ==============================
     SET(_BOOL "True;False")
     SET(_BF_SIZE "8;16;32;64")
     SET(_CHUNK_SIZE "64;128")
   # ------------------------------
 
   # ==============================
-  # 3. Set default values if nothing was specified
+  # 2. Set default values if nothing was specified
   # ==============================
     IF(NOT COUNT_STATS)
       SET(COUNT_STATS ${DEF_COUNT_STATS})
@@ -63,7 +51,7 @@ CMAKE_MINIMUM_REQUIRED ( VERSION 3.1.0 )
   # ------------------------------ 
 
   # ==============================
-  # 4. Check if current value is valid, else set default
+  # 3. Check if current value is valid, else set default
   # ==============================
     MESSAGE("\n*** *** *** ***")
 
@@ -92,6 +80,15 @@ CMAKE_MINIMUM_REQUIRED ( VERSION 3.1.0 )
     ENDIF()
 
     MESSAGE("*** *** *** ***")
+  # ------------------------------
+
+  # ==============================
+  # 4. Add definitions to C++ Files
+  # ==============================
+    ADD_DEFINITIONS(-DCOUNT_STATS="${COUNT_STATS}")
+    ADD_DEFINITIONS(-DREL_KEYS="${REL_KEYS}")
+    ADD_DEFINITIONS(-DBF_SIZE="${BF_SIZE}")
+    ADD_DEFINITIONS(-DCHUNK_SIZE="${CHUNK_SIZE}")
   # ------------------------------
 
   # ==============================
@@ -686,14 +683,3 @@ INSTALL ( TARGETS
   DESTINATION
   lib
   )
-
-
-# ==============================
-# 6. Remove from CMake Cache, so next time, if no value
-#     is specified, the default value is taken again
-# ==============================
-  UNSET(COUNT_STATS CACHE)
-  UNSET(REL_KEYS CACHE)
-  UNSET(BF_SIZE CACHE)
-  UNSET(CHUNK_SIZE CACHE)
-# ------------------------------

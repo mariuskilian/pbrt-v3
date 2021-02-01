@@ -157,8 +157,12 @@ bool MakeLeafNode(Bounds3f b, std::vector<std::shared_ptr<Primitive>> prims) {
 
 // === OCTREE STRUCTURE CREATION ===
 
-OctreeBasicAccel::OctreeBasicAccel(std::vector<std::shared_ptr<Primitive>> p) : primitives(std::move(p)) {
-    // Hier hast du die Bounding Box falsch initialisiert. Sonst ist immer der Ursprung enthalten.
+OctreeBasicAccel::OctreeBasicAccel(std::vector<std::shared_ptr<Primitive>> p, int max_prims, float prm_thresh, float vol_thresh)
+        : primitives(std::move(p)) {
+    MAX_PRIMS = max_prims;
+    PRM_THRESH = prm_thresh;
+    VOL_THRESH = vol_thresh;
+
     for (int i = 0; i < 3; i++) { wb.pMin[i] = FLT_MAX; wb.pMax[i] = -FLT_MAX; }
 
     // Determine world bounds
@@ -189,6 +193,8 @@ OctreeBasicAccel::OctreeBasicAccel(std::vector<std::shared_ptr<Primitive>> p) : 
     printf("Octree: Starting creation!\n");
     Recurse(0, primitives, wb, 0);
     printf("Octree: Creation done!\n");
+
+    printf("TEST: %i\n", max_prims);
     // printf("Starting visualization\n");
     // lh_dump("visualize_basic.obj");
     // printf("Visualization done!\n");
@@ -227,7 +233,10 @@ void OctreeBasicAccel::Recurse(int offset, std::vector<std::shared_ptr<Primitive
 }
 
 std::shared_ptr<OctreeBasicAccel> CreateOctreeBasicAccelerator(std::vector<std::shared_ptr<Primitive>> prims, const ParamSet &ps) {
-    return std::make_shared<OctreeBasicAccel>(std::move(prims));
+    int max_prims = ps.FindOneInt("maxprims", 32);
+    float prm_thresh = ps.FindOneFloat("prmthresh", 0.9);
+    float vol_thresh = ps.FindOneFloat("volthresh", 0.9);
+    return std::make_shared<OctreeBasicAccel>(std::move(prims), max_prims, prm_thresh, vol_thresh);
 }
 
 OctreeBasicAccel::~OctreeBasicAccel() { //FreeAligned(nodes2);

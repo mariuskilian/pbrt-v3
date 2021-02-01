@@ -778,15 +778,15 @@ std::shared_ptr<Primitive> MakeAccelerator(
     std::shared_ptr<Primitive> accel;
     if      (name == "bvh")
         accel = CreateBVHAccelerator(std::move(prims), paramSet);
-    else if (name == "bvh-chunk-bfs")
+    else if (name == "bvh-bfs")
         accel = CreateBVHChunkBFSAccelerator(std::move(prims), paramSet);
     else if (name == "kdtree")
         accel = CreateKdTreeAccelerator(std::move(prims), paramSet);
-    else if (name == "octree-basic")
+    else if (name == "octree")
         accel = CreateOctreeBasicAccelerator(std::move(prims), paramSet);
-    else if (name == "octree-chunk-bfs")
+    else if (name == "octree-bfs")
         accel = CreateOcChunkBFSAccelerator(std::move(prims), paramSet);
-    else if (name == "octree-chunk-dfs")
+    else if (name == "octree-dfs")
         accel = CreateOcChunkDFSAccelerator(std::move(prims), paramSet);
     else
         Warning("Accelerator \"%s\" unknown.", name.c_str());

@@ -73,7 +73,7 @@ struct alignas(64) BVHChunkBFSAccel::BVHChunkBFS {
     bf_type bitfield[chunk_depth];
 };
 
-uint32_t BVHChunkBFSAccel::Rank(bf_type bitfield[chunk_depth], int n) const {
+uint32_t BVHChunkBFSAccel::Rank(const bf_type bitfield[chunk_depth], int n) const {
     uint32_t count = 0;
     bf_type bits;
     for (int i = 0; i < chunk_depth; i++) {
@@ -122,6 +122,14 @@ BoundConversionFactors CalcBoundConversionFactors(Bounds3f b) {
     return BoundConversionFactors{b2k, k2b};
 }
 
+Vector3f CalcK2B(Bounds3f b) {
+    Vector3f k2b;
+    for (int i = 0; i < 3; i++) {
+        k2b[i] = (b.pMax[i] - b.pMin[i]) / 255.0;
+    }
+    return k2b;
+}
+
 ChildrenBuildInfo BVHChunkBFSAccel::GetChildrenBuildInfo(
     Bounds3f b_root, uint32_t node_offset) const {
     ChildrenBuildInfo cbi = ChildrenBuildInfo{};
@@ -157,8 +165,7 @@ BVHChunkBFSAccel::BVHChunkBFSAccel(std::vector<std::shared_ptr<Primitive>> p,
     num_inner_nodes++;
     num_chunk_ptr_nodes++;
     Recurse(0, 0, WorldBound(), 1);
-    printf("BVHBFS: Build done!\n");
-    printf("BVHBFS: %s\n", BF_SIZE);
+    if (relative_keys) printf("BVHBFS: Build done!\n");
     // Visualisation:
     // printf("BVHBFS: Starting vis!\n");
     // lh_dump("bvh_vis_bfs.obj");
@@ -295,40 +302,48 @@ bool BVHChunkBFSAccel::Intersect(const Ray &ray,
     struct BVHChunkBFSNode {
         uint32_t chunk_idx;
         uint32_t node_idx;
+        Bounds3f root_bounds;
     };
     // Variables that update whenever a new chunk is entered
     uint32_t chunk_offset = 99;  // Set to non-0 value to trigger variable updates in first iteration
-    BVHChunkBFS current_chunk;
+    const BVHChunkBFS *current_chunk;
     BVHChunkBFSNode current_node;
     Vector3f k2b;
+    Bounds3f root_b;
     // Initialize node stack
     BVHChunkBFSNode node_stack[64];
     uint32_t node_stack_offset = 0;
-    if (!WorldBound().IntersectP(ray, invDir, dirIsNeg)) return hit;
+    if (!WorldBound().IntersectP(ray, invDir, dirIsNeg)) return false;
     if (dirIsNeg[bvh->GetNodes()[0].axis]) {
-        node_stack[node_stack_offset++] = BVHChunkBFSNode{0, 0};
-        current_node = BVHChunkBFSNode{0, 1};
+        node_stack[node_stack_offset++] = BVHChunkBFSNode{0, 0, WorldBound()};
+        current_node = BVHChunkBFSNode{0, 1, WorldBound()};
     } else {
-        node_stack[node_stack_offset++] = BVHChunkBFSNode{0, 1};
-        current_node = BVHChunkBFSNode{0, 0};
+        node_stack[node_stack_offset++] = BVHChunkBFSNode{0, 1, WorldBound()};
+        current_node = BVHChunkBFSNode{0, 0, WorldBound()};
     }
     while (true) {
         // If the current node is in a different chunk than the previous node,
         // update chunk
         if (current_node.chunk_idx != chunk_offset) {
             chunk_offset = current_node.chunk_idx;
-            current_chunk = bvh_chunks[chunk_offset];
-            k2b = CalcBoundConversionFactors(current_chunk.b_root).k2b;
+            current_chunk = &(bvh_chunks[chunk_offset]);
+            if (!relative_keys) {
+                k2b = CalcK2B(current_chunk->b_root);
+                root_b = current_chunk->b_root;
+            }
         }
 
-        uint32_t rank = Rank(current_chunk.bitfield, current_node.node_idx);
+        uint32_t rank = Rank(current_chunk->bitfield, current_node.node_idx);
 
-        int idx = current_node.node_idx / bf_size;
-        int bit_pos = current_node.node_idx % bf_size;
-        bool is_inner_node = ((current_chunk.bitfield[idx] >> bit_pos) & (bf_type)1) == (bf_type)1;
+        bool is_inner_node = ((current_chunk->bitfield[current_node.node_idx / bf_size]
+                >> (current_node.node_idx % bf_size)) & (bf_type)1) == (bf_type)1;
 
-        const BVHBFSNodeInfo *ni = &node_info[current_chunk.node_info_offset + current_node.node_idx];
-        Bounds3f b_node = FindCompressedBounds(current_chunk.b_root, ni->bk, k2b);
+        const BVHBFSNodeInfo *ni = &node_info[current_chunk->node_info_offset + current_node.node_idx];
+        if (relative_keys) {
+            k2b = CalcK2B(current_node.root_bounds);
+            root_b = current_node.root_bounds;
+        }
+        Bounds3f b_node = FindCompressedBounds(root_b, ni->bk, k2b);
         if (b_node.IntersectP(ray, invDir, dirIsNeg)) {
             if (is_inner_node) {
                 // Update rank to include current node
@@ -340,23 +355,23 @@ bool BVHChunkBFSAccel::Intersect(const Ray &ray,
                     next_chunk_offset = chunk_offset;
                     next_nodes_offset = 2 * rank;
                 } else {
-                    next_chunk_offset = current_chunk.child_chunk_offset + rank - node_pairs_per_chunk;
+                    next_chunk_offset = current_chunk->child_chunk_offset + rank - node_pairs_per_chunk;
                     next_nodes_offset = 0;
                 }
                 // Add nodes to stack depending on which axis was used to split BVH
                 if (dirIsNeg[ni->axis]) {
-                    node_stack[node_stack_offset++] = BVHChunkBFSNode{next_chunk_offset, next_nodes_offset};
-                    current_node = BVHChunkBFSNode{next_chunk_offset, next_nodes_offset + 1};
+                    node_stack[node_stack_offset++] = BVHChunkBFSNode{next_chunk_offset, next_nodes_offset, b_node};
+                    current_node = BVHChunkBFSNode{next_chunk_offset, next_nodes_offset + 1, b_node};
                 } else {
-                    node_stack[node_stack_offset++] = BVHChunkBFSNode{next_chunk_offset, next_nodes_offset + 1};
-                    current_node = BVHChunkBFSNode{next_chunk_offset, next_nodes_offset};
+                    node_stack[node_stack_offset++] = BVHChunkBFSNode{next_chunk_offset, next_nodes_offset + 1, b_node};
+                    current_node = BVHChunkBFSNode{next_chunk_offset, next_nodes_offset, b_node};
                 }
             } else {
                 // Leaf Node
-                uint32_t sizes_idx = current_chunk.sizes_offset + current_node.node_idx - rank;
-                uint32_t prim_start = current_chunk.primitive_offset +
+                uint32_t sizes_idx = current_chunk->sizes_offset + current_node.node_idx - rank;
+                uint32_t prim_start = current_chunk->primitive_offset +
                         ((current_node.node_idx == rank) ? 0 : sizes[sizes_idx - 1]);
-                uint32_t prim_end = current_chunk.primitive_offset + sizes[sizes_idx];
+                uint32_t prim_end = current_chunk->primitive_offset + sizes[sizes_idx];
                 for (uint32_t i = prim_start; i < prim_end; i++)
                     if (primitives[i].get()->Intersect(ray, isect)) hit = true;
                 if (node_stack_offset == 0) break;
@@ -373,47 +388,55 @@ bool BVHChunkBFSAccel::Intersect(const Ray &ray,
 
 bool BVHChunkBFSAccel::IntersectP(const Ray &ray) const {
     if (!bvh->GetNodes()) return false;
-    ProfilePhase p(Prof::AccelIntersectP);
+    ProfilePhase p(Prof::AccelIntersect);
     Vector3f invDir(1 / ray.d.x, 1 / ray.d.y, 1 / ray.d.z);
     int dirIsNeg[3] = {invDir.x < 0, invDir.y < 0, invDir.z < 0};
     // Follow ray through BVH nodes to find primitive intersections
     struct BVHChunkBFSNode {
         uint32_t chunk_idx;
         uint32_t node_idx;
+        Bounds3f root_bounds;
     };
     // Variables that update whenever a new chunk is entered
     uint32_t chunk_offset = 99;  // Set to non-0 value to trigger variable updates in first iteration
-    BVHChunkBFS current_chunk;
+    const BVHChunkBFS *current_chunk;
     BVHChunkBFSNode current_node;
     Vector3f k2b;
+    Bounds3f root_b;
     // Initialize node stack
     BVHChunkBFSNode node_stack[64];
     uint32_t node_stack_offset = 0;
     if (!WorldBound().IntersectP(ray, invDir, dirIsNeg)) return false;
     if (dirIsNeg[bvh->GetNodes()[0].axis]) {
-        node_stack[node_stack_offset++] = BVHChunkBFSNode{0, 0};
-        current_node = BVHChunkBFSNode{0, 1};
+        node_stack[node_stack_offset++] = BVHChunkBFSNode{0, 0, WorldBound()};
+        current_node = BVHChunkBFSNode{0, 1, WorldBound()};
     } else {
-        node_stack[node_stack_offset++] = BVHChunkBFSNode{0, 1};
-        current_node = BVHChunkBFSNode{0, 0};
+        node_stack[node_stack_offset++] = BVHChunkBFSNode{0, 1, WorldBound()};
+        current_node = BVHChunkBFSNode{0, 0, WorldBound()};
     }
     while (true) {
         // If the current node is in a different chunk than the previous node,
         // update chunk
         if (current_node.chunk_idx != chunk_offset) {
             chunk_offset = current_node.chunk_idx;
-            current_chunk = bvh_chunks[chunk_offset];
-            k2b = CalcBoundConversionFactors(current_chunk.b_root).k2b;
+            current_chunk = &(bvh_chunks[chunk_offset]);
+            if (!relative_keys) {
+                k2b = CalcK2B(current_chunk->b_root);
+                root_b = current_chunk->b_root;
+            }
         }
 
-        uint32_t rank = Rank(current_chunk.bitfield, current_node.node_idx);
+        uint32_t rank = Rank(current_chunk->bitfield, current_node.node_idx);
 
-        int idx = current_node.node_idx / bf_size;
-        int bit_pos = current_node.node_idx % bf_size;
-        bool is_inner_node = ((current_chunk.bitfield[idx] >> bit_pos) & (bf_type)1) == (bf_type)1;
+        bool is_inner_node = ((current_chunk->bitfield[current_node.node_idx / bf_size]
+                >> (current_node.node_idx % bf_size)) & (bf_type)1) == (bf_type)1;
 
-        const BVHBFSNodeInfo *ni = &node_info[current_chunk.node_info_offset + current_node.node_idx];
-        Bounds3f b_node = FindCompressedBounds(current_chunk.b_root, ni->bk, k2b);
+        const BVHBFSNodeInfo *ni = &node_info[current_chunk->node_info_offset + current_node.node_idx];
+        if (relative_keys) {
+            k2b = CalcK2B(current_node.root_bounds);
+            root_b = current_node.root_bounds;
+        }
+        Bounds3f b_node = FindCompressedBounds(root_b, ni->bk, k2b);
         if (b_node.IntersectP(ray, invDir, dirIsNeg)) {
             if (is_inner_node) {
                 // Update rank to include current node
@@ -425,23 +448,23 @@ bool BVHChunkBFSAccel::IntersectP(const Ray &ray) const {
                     next_chunk_offset = chunk_offset;
                     next_nodes_offset = 2 * rank;
                 } else {
-                    next_chunk_offset = current_chunk.child_chunk_offset + rank - node_pairs_per_chunk;
+                    next_chunk_offset = current_chunk->child_chunk_offset + rank - node_pairs_per_chunk;
                     next_nodes_offset = 0;
                 }
                 // Add nodes to stack depending on which axis was used to split BVH
                 if (dirIsNeg[ni->axis]) {
-                    node_stack[node_stack_offset++] = BVHChunkBFSNode{next_chunk_offset, next_nodes_offset};
-                    current_node = BVHChunkBFSNode{next_chunk_offset, next_nodes_offset + 1};
+                    node_stack[node_stack_offset++] = BVHChunkBFSNode{next_chunk_offset, next_nodes_offset, b_node};
+                    current_node = BVHChunkBFSNode{next_chunk_offset, next_nodes_offset + 1, b_node};
                 } else {
-                    node_stack[node_stack_offset++] = BVHChunkBFSNode{next_chunk_offset, next_nodes_offset + 1};
-                    current_node = BVHChunkBFSNode{next_chunk_offset, next_nodes_offset};
+                    node_stack[node_stack_offset++] = BVHChunkBFSNode{next_chunk_offset, next_nodes_offset + 1, b_node};
+                    current_node = BVHChunkBFSNode{next_chunk_offset, next_nodes_offset, b_node};
                 }
             } else {
                 // Leaf Node
-                uint32_t sizes_idx = current_chunk.sizes_offset + current_node.node_idx - rank;
-                uint32_t prim_start = current_chunk.primitive_offset +
+                uint32_t sizes_idx = current_chunk->sizes_offset + current_node.node_idx - rank;
+                uint32_t prim_start = current_chunk->primitive_offset +
                         ((current_node.node_idx == rank) ? 0 : sizes[sizes_idx - 1]);
-                uint32_t prim_end = current_chunk.primitive_offset + sizes[sizes_idx];
+                uint32_t prim_end = current_chunk->primitive_offset + sizes[sizes_idx];
                 for (uint32_t i = prim_start; i < prim_end; i++)
                     if (primitives[i].get()->IntersectP(ray)) return true;
                 if (node_stack_offset == 0) break;
