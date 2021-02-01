@@ -43,16 +43,6 @@
 #include "paramset.h"
 #include "stats.h"
 
-#if defined(_MSC_VER)
-#include "intrin.h"
-#define POPCNT __popcnt64
-#elif defined(__clang__)
-#include "popcntintrin.h"
-#define POPCNT _mm_popcnt_u64
-#elif defined (__linux__)
-#define POPCNT __builtin_popcountll
-#endif
-
 namespace pbrt {
 
 STAT_COUNTER("BVH-BFS/Total nodes", num_total_nodes);
@@ -70,19 +60,19 @@ struct alignas(64) BVHChunkBFSAccel::BVHChunkBFS {
     uint32_t sizes_offset;
     uint32_t node_info_offset;
     uint32_t child_chunk_offset;  // TODO now have 32 bits more than 64B :(
-    bf_type bitfield[chunk_depth];
+    bftype bitfield[chunk_depth];
 };
 
-uint32_t BVHChunkBFSAccel::Rank(const bf_type bitfield[chunk_depth], int n) const {
+uint32_t BVHChunkBFSAccel::Rank(const bftype bitfield[chunk_depth], int n) const {
     uint32_t count = 0;
-    bf_type bits;
+    bftype bits;
     for (int i = 0; i < chunk_depth; i++) {
         bits = bitfield[i];
-        if (n < bf_size) break;
-        count += POPCNT(bits);
-        n -= bf_size;
+        if (n < bfsize) break;
+        count += popcnt(bits);
+        n -= bfsize;
     }
-    return count + POPCNT(bits & (((bf_type)1 << n) - (bf_type)1));
+    return count + popcnt(bits & ((bftone << n) - bftone));
 }
 
 Bounds3k BVHChunkBFSAccel::FindBoundsKey(Bounds3f b_root, Bounds3f b,
@@ -190,7 +180,7 @@ void BVHChunkBFSAccel::Recurse(uint32_t chunk_offset, uint32_t root_node_idx,
     bvh_chunks[chunk_offset].primitive_offset = primitives.size();
     bvh_chunks[chunk_offset].child_chunk_offset = bvh_chunks.size();
     for (int i = 0; i < chunk_depth; i++)
-        bvh_chunks[chunk_offset].bitfield[i] = (bf_type)0;
+        bvh_chunks[chunk_offset].bitfield[i] = bftzero;
     // Make a node queue and push the root nodes 2 children
     struct BVHChunkBFSNodeBuild {
         uint32_t node_idx;
@@ -213,11 +203,11 @@ void BVHChunkBFSAccel::Recurse(uint32_t chunk_offset, uint32_t root_node_idx,
         LinearBVHNode *node = &bvh->GetNodes()[build_node.node_idx];
         bool is_inner_node = node->nPrimitives == 0;
         // Find correct idx and bit position in bitfield
-        int idx = nodes_processed / bf_size;
-        int bit_pos = nodes_processed % bf_size;
+        int idx = nodes_processed / bfsize;
+        int bit_pos = nodes_processed % bfsize;
         // Determine node type, and process accordingly
         if (is_inner_node) {
-            bvh_chunks[chunk_offset].bitfield[idx] |= ((bf_type)1 << bit_pos);
+            bvh_chunks[chunk_offset].bitfield[idx] |= (bftone << bit_pos);
             if (chunk_fill < node_pairs_per_chunk) {
                 // Real Inner Node
                 Bounds3f root_bounds =
@@ -335,8 +325,8 @@ bool BVHChunkBFSAccel::Intersect(const Ray &ray,
 
         uint32_t rank = Rank(current_chunk->bitfield, current_node.node_idx);
 
-        bool is_inner_node = ((current_chunk->bitfield[current_node.node_idx / bf_size]
-                >> (current_node.node_idx % bf_size)) & (bf_type)1) == (bf_type)1;
+        bool is_inner_node = ((current_chunk->bitfield[current_node.node_idx / bfsize]
+                >> (current_node.node_idx % bfsize)) & bftone) == bftone;
 
         const BVHBFSNodeInfo *ni = &node_info[current_chunk->node_info_offset + current_node.node_idx];
         if (relative_keys) {
@@ -428,8 +418,8 @@ bool BVHChunkBFSAccel::IntersectP(const Ray &ray) const {
 
         uint32_t rank = Rank(current_chunk->bitfield, current_node.node_idx);
 
-        bool is_inner_node = ((current_chunk->bitfield[current_node.node_idx / bf_size]
-                >> (current_node.node_idx % bf_size)) & (bf_type)1) == (bf_type)1;
+        bool is_inner_node = ((current_chunk->bitfield[current_node.node_idx / bfsize]
+                >> (current_node.node_idx % bfsize)) & bftone) == bftone;
 
         const BVHBFSNodeInfo *ni = &node_info[current_chunk->node_info_offset + current_node.node_idx];
         if (relative_keys) {
@@ -525,14 +515,14 @@ void BVHChunkBFSAccel::lh_dump_rec(FILE *f, uint32_t *vcnt_,
         // If the chunk doesn't contain more nodes, stop
         if (pair_id >= num_chunk_pairs) break;
         // Basic information about where node is in bitfield
-        int bf_idx = (pair_id * 2) / bf_size;  // which idx in bitfield array
+        int bf_idx = (pair_id * 2) / bfsize;  // which idx in bitfield array
         int pair_idx =
-            pair_id % (bf_size / 2);  // how many-th pair inside single bitfield
+            pair_id % (bfsize / 2);  // how many-th pair inside single bitfield
         for (int bit = 0; bit < 2; bit++) {
             int node_id = 2 * pair_id + bit;  // how many-th node overall
             int node_idx =
-                node_id % bf_size;  // how many-th node inside single bitfield
-            const bf_type one = (bf_type)1;  // macro
+                node_id % bfsize;  // how many-th node inside single bitfield
+            const bftype one = bftone;  // macro
             // Bound calculations
             BVHBFSNodeInfo ni = node_info[c.node_info_offset + node_id];
             Bounds3f node_b_comp =
@@ -632,9 +622,9 @@ void BVHChunkBFSAccel::lh_dump_rec_dfs(FILE *f, uint32_t *vcnt_,
 
         uint32_t rank = Rank(current_chunk.bitfield, current_node.node_idx);
 
-        int idx = current_node.node_idx / bf_size;
-        int bit_pos = current_node.node_idx % bf_size;
-        bool is_inner_node = ((current_chunk.bitfield[idx] >> bit_pos) & (bf_type)1) == (bf_type)1;
+        int idx = current_node.node_idx / bfsize;
+        int bit_pos = current_node.node_idx % bfsize;
+        bool is_inner_node = ((current_chunk.bitfield[idx] >> bit_pos) & bftone) == bftone;
 
         const BVHBFSNodeInfo *ni = &node_info[current_chunk.node_info_offset + current_node.node_idx];
         Bounds3f b_node = FindCompressedBounds(current_chunk.b_root, ni->bk, k2b);

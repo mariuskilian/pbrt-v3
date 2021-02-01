@@ -72,8 +72,8 @@ class OcChunkDFSAccel : public Aggregate {
     struct alignas(64) Chunk {
       uint32_t child_chunk_offset;
       uint32_t sizes_offset;
-      std::array<BITFIELD_TYPE, DFS_CHUNK_DEPTH> nodes; // 1 inner node, 0 leaf node
-      std::array<BITFIELD_TYPE, DFS_CHUNK_DEPTH> types; // 1 chunk ptr, 0 real inner
+      std::array<bftype, DFS_CHUNK_DEPTH> nodes; // 1 inner node, 0 leaf node
+      std::array<bftype, DFS_CHUNK_DEPTH> types; // 1 chunk ptr, 0 real inner
     };
     std::vector<std::shared_ptr<Primitive>> leaves;
     std::vector<int> sizes;

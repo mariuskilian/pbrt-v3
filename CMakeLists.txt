@@ -86,9 +86,30 @@ CMAKE_MINIMUM_REQUIRED ( VERSION 3.1.0 )
   # 4. Add definitions to C++ Files
   # ==============================
     ADD_DEFINITIONS(-DCOUNT_STATS="${COUNT_STATS}")
+
     ADD_DEFINITIONS(-DREL_KEYS="${REL_KEYS}")
+
     ADD_DEFINITIONS(-DBF_SIZE="${BF_SIZE}")
-    ADD_DEFINITIONS(-DCHUNK_SIZE="${CHUNK_SIZE}")
+    IF(${BF_SIZE} EQUAL 8)
+      ADD_DEFINITIONS(-DBFSIZE8="")
+    ENDIF()
+    IF(${BF_SIZE} EQUAL 16)
+      ADD_DEFINITIONS(-DBFSIZE16="")
+    ENDIF()
+    IF(${BF_SIZE} EQUAL 32)
+      ADD_DEFINITIONS(-DBFSIZE32="")
+    ENDIF()
+    IF(${BF_SIZE} EQUAL 64)
+      ADD_DEFINITIONS(-DBFSIZE64="")
+    ENDIF()
+
+    ADD_DEFINITIONS(-DCHUNK_SIZE="${BF_SIZE}")
+    IF(${CHUNK_SIZE} EQUAL 64)
+      ADD_DEFINITIONS(-DCHUNKSIZE64="")
+    ENDIF()
+    IF(${CHUNK_SIZE} EQUAL 128)
+      ADD_DEFINITIONS(-DCHUNKSIZE128="")
+    ENDIF()
   # ------------------------------
 
   # ==============================

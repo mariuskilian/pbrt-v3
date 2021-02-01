@@ -44,25 +44,25 @@ namespace pbrt {
 
 // === HELPERS ===
 
-int BitfieldRankOffset(std::array<BITFIELD_TYPE, BFS_CHUNK_DEPTH> bitfield, int n) {
+int BitfieldRankOffset(std::array<bftype, BFS_CHUNK_DEPTH> bitfield, int n) {
     int count = 0;
-    BITFIELD_TYPE bits;
+    bftype bits;
     for (int i = 0; i < BFS_CHUNK_DEPTH; i++) {
-        if ((n -= BITFIELD_SIZE) < 0) break;
+        if ((n -= bfsize) < 0) break;
         count += Rank(bitfield[i]);
     }
     return count;
 }
 
-int BitfieldRankUnique(std::array<BITFIELD_TYPE, BFS_CHUNK_DEPTH> bitfield, int n) {
-    int idx = n / BITFIELD_SIZE;
-    int pos = n % BITFIELD_SIZE;
+int BitfieldRankUnique(std::array<bftype, BFS_CHUNK_DEPTH> bitfield, int n) {
+    int idx = n / bfsize;
+    int pos = n % bfsize;
     return Rank(bitfield[idx], pos);
 }
 
-bool IsInnerNode(std::array<BITFIELD_TYPE, BFS_CHUNK_DEPTH> bitfield, int n) {
-    int i = n / BITFIELD_SIZE;
-    int offset = n % BITFIELD_SIZE;
+bool IsInnerNode(std::array<bftype, BFS_CHUNK_DEPTH> bitfield, int n) {
+    int i = n / bfsize;
+    int offset = n % bfsize;
     return ((bitfield[i] >> offset) & 1) == 1;
 }
 
@@ -98,10 +98,10 @@ void OcChunkBFSAccel::Recurse(uint32_t root_node_offset, int chunk_idx) {
         node_offset = bfs_nodes_q.front();
         is_inner_node = (oba.Nodes()[node_offset] & 1) == 0;
             
-        int idx = num_nodes / BITFIELD_SIZE;
-        int bit_pos = num_nodes % BITFIELD_SIZE;
+        int idx = num_nodes / bfsize;
+        int bit_pos = num_nodes % bfsize;
         // When starting a new index, make sure the initial value of the bitcode is 0
-        if (bit_pos == 0) octree[chunk_idx].nodes[idx] = ZERO;
+        if (bit_pos == 0) octree[chunk_idx].nodes[idx] = bftzero;
 
         // If it's an inner node, properly reserve its children (new chunk or in current chunk)
         if (is_inner_node) {
@@ -116,7 +116,7 @@ void OcChunkBFSAccel::Recurse(uint32_t root_node_offset, int chunk_idx) {
                 for (int i = 0; i < 8; i++) { bfs_nodes_q.push(child_offset + i); }
                 chunk_fill_size++;
             }
-            octree[chunk_idx].nodes[idx] |= ONE << bit_pos;
+            octree[chunk_idx].nodes[idx] |= bftone << bit_pos;
         } else {
             // Leaf Node
             uint32_t prim_start = oba.Nodes()[node_offset] >> 1;
@@ -157,7 +157,7 @@ bool OcChunkBFSAccel::Intersect(const Ray &ray, SurfaceInteraction *isect) const
 void OcChunkBFSAccel::RecurseIntersect(const Ray &ray, SurfaceInteraction *isect, uint32_t chunk_offset, Bounds3f parent_bounds, Float tMin, bool &hit) const {
     Chunk c = octree[chunk_offset];
 
-    std::array<Node, 1 + BITFIELD_SIZE * BFS_CHUNK_DEPTH> traversal; // Node stack
+    std::array<Node, 1 + bfsize * BFS_CHUNK_DEPTH> traversal; // Node stack
     traversal[0] = Node{0, parent_bounds, tMin};
     int traversal_idx = 0;
 
@@ -227,14 +227,14 @@ void OcChunkBFSAccel::lh_dump_rec(FILE *f, uint32_t *vcnt_, uint32_t chunk_offse
 
     int num_node_sets = 1; // We have at least 1 node 'set' of 8 nodes in the chunk
     for (int idx = 0; idx < BFS_CHUNK_DEPTH; idx++) {
-        for (BITFIELD_TYPE set = 0; set < NUM_SETS_PER_BITFIELD; set++) {
+        for (bftype set = 0; set < NUM_SETS_PER_BITFIELD; set++) {
             if (current_set_idx++ >= num_node_sets) break; // This chunk wasn't completely filled
             
             // Go through current nodes children
             Vector3f b_h = BoundsHalf(bounds_q.front());
-            for (BITFIELD_TYPE bit = 0; bit < 8; bit++) {
+            for (bftype bit = 0; bit < 8; bit++) {
                 Bounds3f b = DivideBounds(bounds_q.front(), bit, b_h);
-                if (((c.nodes[idx] >> (set*8 + bit)) & ONE) == ONE) {
+                if (((c.nodes[idx] >> (set*8 + bit)) & bftone) == bftone) {
                     if (num_node_sets < BFS_NUM_SETS_PER_CHUNK) {
                         // Inner Node
                         bounds_q.push(b);
@@ -279,7 +279,7 @@ void OcChunkBFSAccel::lh_dump_dfs(const char *path) {
 void OcChunkBFSAccel::lh_dump_rec_dfs(FILE *f, uint32_t *vcnt_, uint32_t chunk_offset, Bounds3f bounds) {
     Chunk c = octree[chunk_offset];
 
-    std::array<Node, 1 + BITFIELD_SIZE * BFS_CHUNK_DEPTH> traversal; // Node stack
+    std::array<Node, 1 + bfsize * BFS_CHUNK_DEPTH> traversal; // Node stack
     traversal[0] = Node{0, bounds};
     int traversal_idx = 0;
 

@@ -38,16 +38,6 @@
 #include "stats.h"
 #include <algorithm>
 
-#if defined(_MSC_VER)
-    #include "intrin.h"
-    #define POPCNT __popcnt64
-#elif defined(__clang__)
-    #include "popcntintrin.h"
-    #define POPCNT _mm_popcnt_u64
-#elif defined (__linux__)
-    #define POPCNT __builtin_popcount
-#endif
-
 namespace pbrt {
 
 // === HELPERS ===
@@ -95,9 +85,9 @@ ChildTraversal FindTraversalOrder(const Ray &ray, Bounds3f b, Float tMin) {
     return ChildTraversal{traversal, size};
 }
 
-int Rank(BITFIELD_TYPE bits, int n) {
-    if (n == BITFIELD_SIZE) return POPCNT(bits);
-    return POPCNT(bits & ((ONE << n) - ONE));
+int Rank(bftype bits, int n) {
+    if (n == bfsize) return popcnt(bits);
+    return popcnt(bits & ((bftone << n) - bftone));
 }
 
 bool BoundsContainPrim(Bounds3f b, std::shared_ptr<Primitive> p) {

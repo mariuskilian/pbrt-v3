@@ -41,6 +41,7 @@
 // accelerators/octree.h*
 #include "pbrt.h"
 #include "primitive.h"
+#include "custom_params.h"
 #include <array>
 
 namespace pbrt {
@@ -49,18 +50,29 @@ static int MAX_PRIMS;
 static Float PRM_THRESH;
 static Float VOL_THRESH;
 
-// Change this for different type
-typedef uint64_t BITFIELD_TYPE;
-const int BFS_CHUNK_DEPTH = 7; // Size of chunk array of type BITFIELD_X below
+// Size of chunk array of type BITFIELD_X below
+
+#if defined (CHUNKSIZE64)
+  const int bytes_free = 56;
+#elif defined (CHUNKSIZE128)
+  const int bytes_free = 120;
+#endif
+#if defined (BFSIZE8)
+  const int bytes_per_bf = 1;
+#elif defined (BFSIZE16)
+  const int bytes_per_bf = 2;
+#elif defined (BFSIZE32)
+  const int bytes_per_bf = 4;
+#elif defined (BFSIZE64)
+  const int bytes_per_bf = 8;
+#endif
+const int BFS_CHUNK_DEPTH = bytes_free / bytes_per_bf;
 
 // DON'T change these!
 const int DFS_CHUNK_DEPTH = BFS_CHUNK_DEPTH / 2;
-const int BITFIELD_SIZE = 8 * sizeof(BITFIELD_TYPE);
-const int NUM_SETS_PER_BITFIELD = sizeof(BITFIELD_TYPE);
+const int NUM_SETS_PER_BITFIELD = sizeof(bftype);
 const int BFS_NUM_SETS_PER_CHUNK = NUM_SETS_PER_BITFIELD * BFS_CHUNK_DEPTH;
 const int DFS_NUM_SETS_PER_CHUNK = NUM_SETS_PER_BITFIELD * DFS_CHUNK_DEPTH;
-const BITFIELD_TYPE ZERO = (BITFIELD_TYPE)0;
-const BITFIELD_TYPE ONE = (BITFIELD_TYPE)1;
 
 struct ChildHit { int idx; float tMin; };
 struct ChildTraversal { std::array<ChildHit, 4> nodes; int size; };
@@ -68,7 +80,7 @@ struct ChildTraversal { std::array<ChildHit, 4> nodes; int size; };
 Vector3f BoundsHalf(Bounds3f b);
 Bounds3f DivideBounds(Bounds3f b, int idx, Vector3f b_half);
 ChildTraversal FindTraversalOrder(const Ray &ray, Bounds3f b, Float tMin);
-int Rank(BITFIELD_TYPE bits, int n = BITFIELD_SIZE);
+int Rank(bftype bits, int n = bfsize);
 bool BoundsContainPrim(Bounds3f b, std::shared_ptr<Primitive> p);
 bool MakeLeafNode(Bounds3f b, std::vector<std::shared_ptr<Primitive>>);
 

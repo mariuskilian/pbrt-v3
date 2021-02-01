@@ -44,25 +44,25 @@ namespace pbrt {
 
 // === HELPERS ===
 
-int BitfieldRankOffset(std::array<BITFIELD_TYPE, DFS_CHUNK_DEPTH> bitfield, int n) {
+int BitfieldRankOffset(std::array<bftype, DFS_CHUNK_DEPTH> bitfield, int n) {
     int count = 0;
-    BITFIELD_TYPE bits;
+    bftype bits;
     for (int i = 0; i < DFS_CHUNK_DEPTH; i++) {
-        if ((n -= BITFIELD_SIZE) < 0) break;
+        if ((n -= bfsize) < 0) break;
         count += Rank(bitfield[i]);
     }
     return count;
 }
 
-int BitfieldRankUnique(std::array<BITFIELD_TYPE, DFS_CHUNK_DEPTH> bitfield, int n) {
-    int idx = n / BITFIELD_SIZE;
-    int pos = n % BITFIELD_SIZE;
+int BitfieldRankUnique(std::array<bftype, DFS_CHUNK_DEPTH> bitfield, int n) {
+    int idx = n / bfsize;
+    int pos = n % bfsize;
     return Rank(bitfield[idx], pos);
 }
 
-bool IsInnerNode(std::array<BITFIELD_TYPE, DFS_CHUNK_DEPTH> bitfield, int n) {
-    int i = n / BITFIELD_SIZE;
-    int offset = n % BITFIELD_SIZE;
+bool IsInnerNode(std::array<bftype, DFS_CHUNK_DEPTH> bitfield, int n) {
+    int i = n / bfsize;
+    int offset = n % bfsize;
     return ((bitfield[i] >> offset) & 1) == 1;
 }
 
@@ -202,16 +202,16 @@ std::vector<OcChunkDFSAccel::ChunkCreator> OcChunkDFSAccel::CreateChunk(ChunkCre
             Child child = rin->children[i];
             bool is_inner_node = (child.node & (uint32_t)1) == (uint32_t)0;
             
-            int idx = num_nodes / BITFIELD_SIZE;
-            int bit_pos = num_nodes % BITFIELD_SIZE;
+            int idx = num_nodes / bfsize;
+            int bit_pos = num_nodes % bfsize;
             // When starting a new index, make sure the initial value of the bitcode is 0
             if (bit_pos == 0) {
-                octree[cc.chunk_idx].nodes[idx] = ZERO;
-                octree[cc.chunk_idx].types[idx] = ZERO;
+                octree[cc.chunk_idx].nodes[idx] = bftzero;
+                octree[cc.chunk_idx].types[idx] = bftzero;
             }
 
             if (is_inner_node) {
-                octree[cc.chunk_idx].nodes[idx] |= ONE << bit_pos;
+                octree[cc.chunk_idx].nodes[idx] |= bftone << bit_pos;
                 if (child.is_rin) {
                     rin_q.push(rin->rin_childs[i]);
                 } else {
@@ -224,7 +224,7 @@ std::vector<OcChunkDFSAccel::ChunkCreator> OcChunkDFSAccel::CreateChunk(ChunkCre
                     cpn.p = p;
                     cpn.chunk_idx = octree[cc.chunk_idx].child_chunk_offset + chunk_ptr_nodes.size();
                     chunk_ptr_nodes.push_back(cpn);
-                    octree[cc.chunk_idx].types[idx] |= ONE << bit_pos;
+                    octree[cc.chunk_idx].types[idx] |= bftone << bit_pos;
                 }
             } else {
                 uint32_t prim_start = child.node >> 1;
@@ -264,7 +264,7 @@ bool OcChunkDFSAccel::Intersect(const Ray &ray, SurfaceInteraction *isect) const
 void OcChunkDFSAccel::RecurseIntersect(const Ray &ray, SurfaceInteraction *isect, uint32_t chunk_offset, Bounds3f parent_bounds, Float tMin, bool &hit) const {
     Chunk c = octree[chunk_offset];
 
-    std::array<Node, 1 + BITFIELD_SIZE * DFS_CHUNK_DEPTH> traversal; // Node stack
+    std::array<Node, 1 + bfsize * DFS_CHUNK_DEPTH> traversal; // Node stack
     traversal[0] = Node{0, 0, parent_bounds, tMin};
     int traversal_idx = 0;
 
@@ -341,14 +341,14 @@ void OcChunkDFSAccel::lh_dump_rec(FILE *f, uint32_t *vcnt_, uint32_t chunk_offse
 
     int num_node_sets = 1; // We have at least 1 node 'set' of 8 nodes in the chunk
     for (int idx = 0; idx < DFS_CHUNK_DEPTH; idx++) {
-        for (BITFIELD_TYPE set = 0; set < NUM_SETS_PER_BITFIELD; set++) {
+        for (bftype set = 0; set < NUM_SETS_PER_BITFIELD; set++) {
             if (current_set_idx++ >= num_node_sets) break; // This chunk wasn't completely filled
             
             // Go through current nodes children
             Vector3f b_h = BoundsHalf(bounds_q.front());
-            for (BITFIELD_TYPE bit = 0; bit < 8; bit++) {
+            for (bftype bit = 0; bit < 8; bit++) {
                 Bounds3f b = DivideBounds(bounds_q.front(), bit, b_h);
-                if (((c.nodes[idx] >> (set*8 + bit)) & ONE) == ONE) {
+                if (((c.nodes[idx] >> (set*8 + bit)) & bftone) == bftone) {
                     if (num_node_sets < BFS_NUM_SETS_PER_CHUNK) {
                         // Inner Node
                         bounds_q.push(b);
@@ -393,7 +393,7 @@ void OcChunkDFSAccel::lh_dump_dfs(const char *path) {
 void OcChunkDFSAccel::lh_dump_rec_dfs(FILE *f, uint32_t *vcnt_, uint32_t chunk_offset, Bounds3f bounds) {
     // Chunk c = octree[chunk_offset];
 
-    // std::array<Node, 1 + BITFIELD_SIZE * DFS_CHUNK_DEPTH> traversal; // Node stack
+    // std::array<Node, 1 + bfsize * DFS_CHUNK_DEPTH> traversal; // Node stack
     // traversal[0] = Node{0, bounds};
     // int traversal_idx = 0;
 

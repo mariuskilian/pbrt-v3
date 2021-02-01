@@ -67,11 +67,11 @@ class OcChunkBFSAccel : public Aggregate {
 
     struct Node { int bitcnt; Bounds3f bounds; Float tMin; };
 
-    struct alignas(64) Chunk {
+    struct alignas(chunksize) Chunk {
       uint32_t child_chunk_offset;
       uint32_t sizes_offset;
       // TODO sizes array ausserhalb chunks
-      std::array<BITFIELD_TYPE, BFS_CHUNK_DEPTH> nodes; // 1 inner node, 0 leaf node
+      std::array<bftype, BFS_CHUNK_DEPTH> nodes; // 1 inner node, 0 leaf node
     };
     std::vector<std::shared_ptr<Primitive>> leaves;
     std::vector<int> sizes;

@@ -42,11 +42,12 @@
 #include "pbrt.h"
 #include "primitive.h"
 #include "bvh.h"
+#include "custom_params.h"
 #include <atomic>
 
 namespace pbrt {
 
-const bool relative_keys = false;//strcmp(REL_KEYS, "False");
+const bool relative_keys = strcmp(REL_KEYS, "True") == 0;
 
 typedef BVHAccel::SplitMethod SplitMethod;
 struct Bounds3k { uint8_t min[3]; uint8_t max[3]; };
@@ -72,10 +73,22 @@ class BVHChunkBFSAccel : public Aggregate {
   private:
     struct BVHChunkBFS;
 
-    typedef uint64_t bf_type;
-    static const int bf_size = sizeof(bf_type) * 8;
-    static const int chunk_depth = 3;
-    static const int node_pairs_per_chunk = bf_size * chunk_depth / 2;
+    #if defined (CHUNKSIZE64)
+      static const int bytes_free = 24;
+    #elif defined (CHUNKSIZE128)
+      static const int bytes_free = 88;
+    #endif
+    #if defined (BFSIZE8)
+      static const int bytes_per_bf = 1;
+    #elif defined (BFSIZE16)
+      static const int bytes_per_bf = 2;
+    #elif defined (BFSIZE32)
+      static const int bytes_per_bf = 4;
+    #elif defined (BFSIZE64)
+      static const int bytes_per_bf = 8;
+    #endif
+    static const int chunk_depth = bytes_free / bytes_per_bf;
+    static const int node_pairs_per_chunk = bfsize * chunk_depth / 2;
     static const int node_pairs_per_bitfield = node_pairs_per_chunk / chunk_depth;
     int num_chunk_layers = 0;
 
@@ -90,7 +103,7 @@ class BVHChunkBFSAccel : public Aggregate {
 
     BVHAccel *bvh;
 
-    uint32_t Rank(const bf_type bitfield[chunk_depth], int n) const;
+    uint32_t Rank(const bftype bitfield[chunk_depth], int n) const;
 
     Bounds3k FindBoundsKey(Bounds3f b_root, Bounds3f b, Vector3f factor) const;
     Bounds3f FindCompressedBounds(Bounds3f b_root, Bounds3k b_k, Vector3f factor) const;
