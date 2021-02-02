@@ -20,27 +20,16 @@ CMAKE_MINIMUM_REQUIRED ( VERSION 3.1.0 )
   # ==============================
   # 1. Define default values and accepted values
   # ==============================
-    SET(DEF_COUNT_STATS False)
-    SET(DEF_REL_KEYS False)
     SET(DEF_BF_SIZE 64)
     SET(DEF_CHUNK_SIZE 64)
 
-    SET(_BOOL "True;False")
     SET(_BF_SIZE "8;16;32;64")
-    SET(_CHUNK_SIZE "64;128")
+    SET(_CHUNK_SIZE "64;128;256")
   # ------------------------------
 
   # ==============================
   # 2. Set default values if nothing was specified
   # ==============================
-    IF(NOT COUNT_STATS)
-      SET(COUNT_STATS ${DEF_COUNT_STATS})
-    ENDIF()
-
-    IF(NOT REL_KEYS)
-      SET(REL_KEYS ${DEF_REL_KEYS})
-    ENDIF()
-
     IF(NOT BF_SIZE)
       SET(BF_SIZE ${DEF_BF_SIZE})
     ENDIF()
@@ -54,18 +43,6 @@ CMAKE_MINIMUM_REQUIRED ( VERSION 3.1.0 )
   # 3. Check if current value is valid, else set default
   # ==============================
     MESSAGE("\n*** *** *** ***")
-
-    LIST(FIND _BOOL "${COUNT_STATS}" _IDX)
-    IF(${_IDX} EQUAL -1)
-      SET(COUNT_STATS ${DEF_COUNT_STATS})
-      MESSAGE("ERROR: INVALID INPUT. Setting default value for COUNT_STATS")
-    ENDIF()
-
-    LIST(FIND _BOOL "${REL_KEYS}" _IDX)
-    IF(${_IDX} EQUAL -1)
-      SET(REL_KEYS ${DEF_REL_KEYS})
-      MESSAGE("ERROR: INVALID INPUT. Setting default value for REL_KEYS")
-    ENDIF()
 
     LIST(FIND _BF_SIZE "${BF_SIZE}" _IDX)
     IF(${_IDX} EQUAL -1)
@@ -85,38 +62,45 @@ CMAKE_MINIMUM_REQUIRED ( VERSION 3.1.0 )
   # ==============================
   # 4. Add definitions to C++ Files
   # ==============================
-    ADD_DEFINITIONS(-DCOUNT_STATS="${COUNT_STATS}")
-
-    ADD_DEFINITIONS(-DREL_KEYS="${REL_KEYS}")
-
-    ADD_DEFINITIONS(-DBF_SIZE="${BF_SIZE}")
     IF(${BF_SIZE} EQUAL 8)
-      ADD_DEFINITIONS(-DBFSIZE8="")
+      ADD_DEFINITIONS(-DBFSIZE8)
     ENDIF()
     IF(${BF_SIZE} EQUAL 16)
-      ADD_DEFINITIONS(-DBFSIZE16="")
+      ADD_DEFINITIONS(-DBFSIZE16)
     ENDIF()
     IF(${BF_SIZE} EQUAL 32)
-      ADD_DEFINITIONS(-DBFSIZE32="")
+      ADD_DEFINITIONS(-DBFSIZE32)
     ENDIF()
     IF(${BF_SIZE} EQUAL 64)
-      ADD_DEFINITIONS(-DBFSIZE64="")
+      ADD_DEFINITIONS(-DBFSIZE64)
     ENDIF()
 
-    ADD_DEFINITIONS(-DCHUNK_SIZE="${BF_SIZE}")
     IF(${CHUNK_SIZE} EQUAL 64)
-      ADD_DEFINITIONS(-DCHUNKSIZE64="")
+      ADD_DEFINITIONS(-DCHUNKSIZE64)
     ENDIF()
     IF(${CHUNK_SIZE} EQUAL 128)
-      ADD_DEFINITIONS(-DCHUNKSIZE128="")
+      ADD_DEFINITIONS(-DCHUNKSIZE128)
+    ENDIF()
+    IF(${CHUNK_SIZE} EQUAL 256)
+      ADD_DEFINITIONS(-DCHUNKSIZE256)
     ENDIF()
   # ------------------------------
 
   # ==============================
   # 5. Print all custom options
   # ==============================
-    MESSAGE("COUNT_STATS=${COUNT_STATS}")
-    MESSAGE("REL_KEYS=${REL_KEYS}")
+    IF(NOT COUNT_STATS)
+      MESSAGE("COUNT_STATS=False")
+    ELSE()
+      MESSAGE("COUNT_STATS=True")
+    ENDIF()
+
+    IF(NOT REL_KEYS)
+      MESSAGE("REL_KEYS=False")
+    ELSE()
+      MESSAGE("REL_KEYS=True")
+    ENDIF()
+
     MESSAGE("BF_SIZE=${BF_SIZE}\t\t[Bits]")
     MESSAGE("CHUNK_SIZE=${CHUNK_SIZE}\t\t[Bytes]")
     MESSAGE("")
@@ -704,3 +688,10 @@ INSTALL ( TARGETS
   DESTINATION
   lib
   )
+
+  # ==============================
+  # 6. Unset the bool options from the Cache
+  # ==============================
+    UNSET(COUNT_STATS CACHE)
+    UNSET(REL_KEYS CACHE)
+  # ------------------------------

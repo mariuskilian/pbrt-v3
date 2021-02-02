@@ -9,41 +9,55 @@
 #include "pbrt.h"
 
 namespace pbrt {
-    
-#if defined(CHUNKSIZE64)
-  const int chunksize = 64;
-#elif defined(CHUNKSIZE128)
-  const int chunksize = 128;
+
+#if defined (COUNT_STATS)
+  const bool count_stats = true;
+#else
+  const bool count_stats = false;
 #endif
 
-#if defined(BFSIZE8)
+#if defined (REL_KEYS)
+  const bool relative_keys = true;
+#else
+  const bool relative_keys = false;
+#endif
+    
+#if defined (CHUNKSIZE64)
+  const int chunksize = 64;
+#elif defined (CHUNKSIZE128)
+  const int chunksize = 128;
+#elif defined (CHUNKSIZE256)
+  const int chunksize = 256;
+#endif
+
+#if defined (BFSIZE8)
   typedef uint8_t bftype;
-#elif defined(BFSIZE16)
+#elif defined (BFSIZE16)
   typedef uint16_t bftype;
-#elif defined(BFSIZE32)
+#elif defined (BFSIZE32)
   typedef uint32_t bftype;
-#elif defined(BFSIZE64)
+#elif defined (BFSIZE64)
   typedef uint64_t bftype;
 #endif
 
-#if defined(_MSC_VER)
+#if defined (_MSC_VER)
   #include "intrin.h"
-  #if defined(BFSIZE8) || defined(BFSIZE16)
+  #if defined (BFSIZE8) || defined (BFSIZE16)
     #define popcnt __popcnt16
-  #elif defined(BFSIZE32)
+  #elif defined (BFSIZE32)
     #define popcnt __popcnt
-  #elif defined(BFSIZE64)
+  #elif defined (BFSIZE64)
     #define popcnt __popcnt64
   #endif
 #else
-  #if defined(__clang__)
+  #if defined (__clang__)
     #include "popcntintrin.h"
   #elif defined (__linux__)
     #include <nmmintrin.h>
   #endif
-  #if defined(BFSIZE8) || defined(BFSIZE16) || defined(BFSIZE32)
+  #if defined (BFSIZE8) || defined (BFSIZE16) || defined (BFSIZE32)
     #define popcnt _mm_popcnt_u32
-  #elif defined(BFSIZE64)
+  #elif defined (BFSIZE64)
     #define popcnt _mm_popcnt_u64
   #endif
 #endif

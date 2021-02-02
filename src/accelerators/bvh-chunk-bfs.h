@@ -47,8 +47,6 @@
 
 namespace pbrt {
 
-const bool relative_keys = strcmp(REL_KEYS, "True") == 0;
-
 typedef BVHAccel::SplitMethod SplitMethod;
 struct Bounds3k { uint8_t min[3]; uint8_t max[3]; };
 struct BVHBFSNodeInfo { Bounds3k bk; uint8_t axis; }; //IDEA: take 2 bits of non-axis min to save axis. 
