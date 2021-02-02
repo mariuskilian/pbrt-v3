@@ -49,16 +49,18 @@ namespace pbrt {
   #elif defined (BFSIZE64)
     #define popcnt __popcnt64
   #endif
-#else
-  #if defined (__clang__)
-    #include "popcntintrin.h"
-  #elif defined (__linux__)
-    #include <nmmintrin.h>
-  #endif
+#elif defined (__clang__)
+  #include "popcntintrin.h"
   #if defined (BFSIZE8) || defined (BFSIZE16) || defined (BFSIZE32)
     #define popcnt _mm_popcnt_u32
   #elif defined (BFSIZE64)
     #define popcnt _mm_popcnt_u64
+  #endif
+#elif defined (__linux__)
+  #if defined (BFSIZE8) || defined (BFSIZE16) || defined (BFSIZE32)
+    #define popcnt __builtin_popcount
+  #elif defined (BFSIZE64)
+    #define popcnt __builtin_popcountll
   #endif
 #endif
 
