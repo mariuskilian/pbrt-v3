@@ -1,7 +1,8 @@
 *~
 build
 scenes
-evaluation/results
+evaluation/results/*/*
+!evaluation/results/*/run.sh
 src/build
 src/bin
 src/objs

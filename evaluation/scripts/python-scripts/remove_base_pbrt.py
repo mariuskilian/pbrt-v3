@@ -1,14 +1,14 @@
 import os
 import sys
 
-def remove_file(scene, accelerator):
-    path = "/Users/marius/Documents/BachelorArbeit/pbrt-v3/scenes/" + scene 
+def remove_file(scene):
+    path = str(sys.argv[0]).split("remove_base_pbrt.py")[0]
+    path += "../../../scenes/" + scene 
     if os.path.exists(path + "/eval_base.pbrt"):
         os.remove(path + "/eval_base.pbrt")
 
 def exec():
     scene = str(sys.argv[1])
-    accelerator = str(sys.argv[2])
-    remove_file(scene, accelerator)
+    remove_file(scene)
 
 exec()
