@@ -89,6 +89,8 @@ KdTreeAccel::KdTreeAccel(std::vector<std::shared_ptr<Primitive>> p,
       maxPrims(maxPrims),
       emptyBonus(emptyBonus),
       primitives(std::move(p)) {
+    printf("Chosen Accelerator: k-d Tree\n");
+
     // Build kd-tree for accelerator
     ProfilePhase _(Prof::AccelConstruction);
     nextFreeNode = nAllocedNodes = 0;

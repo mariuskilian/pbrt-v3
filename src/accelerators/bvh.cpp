@@ -175,6 +175,8 @@ BVHAccel::BVHAccel(std::vector<std::shared_ptr<Primitive>> p,
     : maxPrimsInNode(std::min(255, maxPrimsInNode)),
       splitMethod(splitMethod),
       primitives(std::move(p)) {
+    printf("Chosen Accelerator: BVH\n");
+
     ProfilePhase _(Prof::AccelConstruction);
     if (primitives.empty()) return;
     // Build BVH from _primitives_

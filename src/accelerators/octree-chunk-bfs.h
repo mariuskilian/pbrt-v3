@@ -52,7 +52,7 @@ class OcChunkBFSAccel : public Aggregate {
 
   public:
     // KdTreeAccel Public Methods
-    OcChunkBFSAccel(std::vector<std::shared_ptr<Primitive>> p);
+    OcChunkBFSAccel(std::vector<std::shared_ptr<Primitive>> p, int max_prims = 32, float prm_thresh = 0.9, float vol_thresh = 0.9);
     Bounds3f WorldBound() const { return wb; }
     ~OcChunkBFSAccel();
     bool Intersect(const Ray &ray, SurfaceInteraction *isect) const;
@@ -80,7 +80,6 @@ class OcChunkBFSAccel : public Aggregate {
     std::vector<Chunk> octree;
     
     void Recurse(uint32_t root_node_offset, int chunk_idx); 
-    void RecurseIntersect(const Ray &ray, SurfaceInteraction *isect, uint32_t chunk_offset, Bounds3f parent_bounds, Float tMin, bool &hit) const;
     void lh_dump(const char *path);
     void lh_dump_rec(FILE *f, uint32_t *vcnt_, uint32_t chunk_offset, Bounds3f bounds);
     void lh_dump_dfs(const char *path);

@@ -42,7 +42,7 @@ namespace pbrt {
 
 // === HELPERS ===
 
-Vector3f BoundsHalf(Bounds3f b) {
+Vector3f BoundsHalf(Bounds3f &b) {
     Vector3f h;
     for (int i = 0; i < 3; i++) h[i] = (b.pMin[i] + b.pMax[i]) / 2;
     return h;
@@ -56,30 +56,45 @@ Bounds3f DivideBounds(Bounds3f b, int idx, Vector3f b_half) {
     return b;
 }
 
-ChildTraversal FindTraversalOrder(const Ray &ray, Bounds3f b, Float tMin) {
-    int size = 1;
+ChildTraversal FindTraversalOrder(const Ray &ray, Bounds3f &b, Float tMin, Vector3f &invDir) {
+    uint32_t size = 1;
     std::array<ChildHit, 4> traversal;
     Vector3f b_h = BoundsHalf(b);
     // First child hit
-    int idx = 0;
+    uint32_t idx = 0;
     Point3f init_point = ray.o + tMin * ray.d;
     for (int i = 0; i < 3; i++) if (init_point[i] > b_h[i]) idx |= (1<<i);
     traversal[0] = ChildHit{ idx, tMin };
     // Cut all bound-half-planes, and if intersection is within bounds, add to list
     for (int axis = 0; axis < 3; axis++) {
         if (ray.d[axis] == 0) continue;
-        Float t = (b_h[axis] - ray.o[axis]) / ray.d[axis];
+        Float t = invDir[axis] * (b_h[axis] - ray.o[axis]);
         if (t < tMin) continue;
         Point3f p = ray.o + t * ray.d;
         bool inside = true;
         for (int i = 0; i < 3; i++) if (p[i] < b.pMin[i] || p[i] > b.pMax[i]) { inside = false; break; }
         if (!inside) continue;
         // Add point to traversal array. It's index is currently only the to-be-flipped axis
-        traversal[size++] = ChildHit{ 1<<axis, t };
+        // 1. Find index to insert
+        int insertion_idx = size;
+        for (int i = 1; i < 4; i++) {
+            if (i == size) break;
+            if (t < traversal[i].tMin) {
+                insertion_idx = i;
+                break;
+            }
+        }
+        // 2. Move every item above that index up
+        for (int i = 3; i > 1; i--) {
+            if (i <= size) {
+                if (i == insertion_idx) break;
+                traversal[i] = traversal[i-1];
+            }
+        }
+        // 3. Insert new childhit in correct place
+        traversal[insertion_idx] = ChildHit{(uint32_t)1<<axis, t};
+        size++;
     }
-    // Sort list based on smallest tMin
-    std::sort(traversal.begin() + 1, traversal.begin() + size, 
-        [](const ChildHit &c1, const ChildHit &c2) {return c1.tMin < c2.tMin;});
     // Finally, determine idx for each child hit
     for (int i = 1; i < size; i++) traversal[i].idx ^= traversal[i-1].idx;
     return ChildTraversal{traversal, size};
@@ -90,7 +105,7 @@ int Rank(bftype bits, int n) {
     return popcnt(bits & ((bftone << n) - bftone));
 }
 
-bool BoundsContainPrim(Bounds3f b, std::shared_ptr<Primitive> p) {
+bool BoundsContainPrim(Bounds3f &b, std::shared_ptr<Primitive> p) {
     Bounds3f b_p = p->WorldBound();
     for (int i = 0; i < 3; i++)
         if (b_p.pMax[i] < b.pMin[i] || b.pMax[i] < b_p.pMin[i])
@@ -98,7 +113,13 @@ bool BoundsContainPrim(Bounds3f b, std::shared_ptr<Primitive> p) {
     return true;
 }
 
-bool MakeLeafNode(Bounds3f b, std::vector<std::shared_ptr<Primitive>> prims) {
+bool BoundsContainPoint(Bounds3f &b, Point3f &p) {
+    for (int i = 0; i < 3; i++)
+        if (p[i] < b.pMin[i] || p[i] > b.pMax[i]) return false;
+    return true;
+}
+
+bool MakeLeafNode(Bounds3f &b, std::vector<std::shared_ptr<Primitive>> prims) {
     // Check how many children contain at least 80% of the parents prims,
     // we call these 'cluster children'
     Vector3f b_h = BoundsHalf(b);
@@ -149,6 +170,8 @@ bool MakeLeafNode(Bounds3f b, std::vector<std::shared_ptr<Primitive>> prims) {
 
 OctreeBasicAccel::OctreeBasicAccel(std::vector<std::shared_ptr<Primitive>> p, int max_prims, float prm_thresh, float vol_thresh)
         : primitives(std::move(p)) {
+    printf("Chosen Accelerator: Octree\n");
+
     MAX_PRIMS = max_prims;
     PRM_THRESH = prm_thresh;
     VOL_THRESH = vol_thresh;
@@ -180,14 +203,9 @@ OctreeBasicAccel::OctreeBasicAccel(std::vector<std::shared_ptr<Primitive>> p, in
     
     nodes.push_back(0);
     sizes.push_back(0);
-    printf("Octree: Starting creation!\n");
     Recurse(0, primitives, wb, 0);
-    printf("Octree: Creation done!\n");
 
-    printf("TEST: %i\n", max_prims);
-    // printf("Starting visualization\n");
     // lh_dump("visualize_basic.obj");
-    // printf("Visualization done!\n");
 }
 
 OctreeBasicAccel::OctreeBasicAccel(){}
@@ -237,42 +255,114 @@ OctreeBasicAccel::~OctreeBasicAccel() { //FreeAligned(nodes2);
 // TODO Rekursion in Schleife umwandeln (schneller)
 bool OctreeBasicAccel::Intersect(const Ray &ray, SurfaceInteraction *isect) const {
     ProfilePhase p(Prof::AccelIntersect);
-    bool hit = false;
     Float tMin, _;
     if (!wb.IntersectP(ray, &tMin, &_)) return false;
-    RecurseIntersect(ray, isect, 0, wb, tMin, hit);
-    return hit;
-}
-
-void OctreeBasicAccel::RecurseIntersect(const Ray &ray, SurfaceInteraction *isect, uint32_t offset, Bounds3f bounds, Float tMin, bool &hit) const {
-    if ((nodes[offset] & 1) == 0) {
-        // Innerer Knoten
-        ChildTraversal traversal = FindTraversalOrder(ray, bounds, tMin);
-        // 3. Schritt: Traversierung der Kindknoten in sortierter Reihenfolge
-        Vector3f b_h = BoundsHalf(bounds);
-        for (int i = 0; i < traversal.size; i++) {
-            // Kindknoten werden dann nicht mehr traversiert, wenn bereits ein näherer Schnitt ermittelt wurde
-            // Dadurch deckt man auch den Fall ab, dass zwar ein Schnitt gefunden wurde, dieser aber außerhalb der Knotens liegt
-            if (traversal.nodes[i].tMin <= ray.tMax) {
-                uint32_t child_offset = (nodes[offset] >> 1) + traversal.nodes[i].idx;
-                Bounds3f child_bounds = DivideBounds(bounds, traversal.nodes[i].idx, b_h);
-                RecurseIntersect(ray, isect, child_offset, child_bounds, traversal.nodes[i].tMin, hit);
-            }
+    bool hit = false;
+    Vector3f invDir = {1/ray.d[0], 1/ray.d[1], 1/ray.d[2]};
+    // boundskey = 29 bits - index in bounds_stack to this nodes parent bounds; 3 bits - node idx [0-7]
+    struct OctreeTraversalNode { uint32_t offset; uint8_t bounds_stack_offset; Float tMin; };
+    struct OctreeTraversalBounds { Bounds3f bounds; Vector3f b_h; };
+    OctreeTraversalNode node_stack[128];
+    OctreeTraversalBounds bounds_stack[64];
+    int node_stack_offset = 0;
+    int bounds_stack_offset = -1;
+    OctreeTraversalNode current_node = OctreeTraversalNode{0, 0, tMin};
+    Bounds3f current_bounds = wb;
+    while (true) {
+        if (bounds_stack_offset >= 0) {
+            current_bounds = 
+                    DivideBounds(bounds_stack[bounds_stack_offset].bounds,
+                                 (current_node.offset - 1) & 7,
+                                 bounds_stack[bounds_stack_offset].b_h);
         }
-    } else {
-        // Leaf Knoten
-        uint32_t prim_start = nodes[offset] >> 1;
-        uint32_t prim_end = prim_start + sizes[offset];
-        for (uint32_t i = prim_start; i < prim_end; i++)
-            // TODO LRU-Cache/Mailboxing, damit man nicht mehrmals dasselbe primitiv testen muss
-            if (leaves[i].get()->Intersect(ray, isect)) hit = true;
+        if ((nodes[current_node.offset] & 1) == 0) {
+            // Innerer Knoten
+            ChildTraversal traversal = FindTraversalOrder(ray, current_bounds, current_node.tMin, invDir);
+            // 3. Schritt: Traversierung der Kindknoten in sortierter Reihenfolge
+            Vector3f b_h = BoundsHalf(current_bounds);
+            bounds_stack[++bounds_stack_offset] = OctreeTraversalBounds{current_bounds, b_h};
+            ChildHit *traversal_node;
+            for (int i = 3; i > 0; i--) {
+                // Kindknoten werden dann nicht mehr traversiert, wenn bereits ein näherer Schnitt ermittelt wurde
+                // Dadurch deckt man auch den Fall ab, dass zwar ein Schnitt gefunden wurde, dieser aber außerhalb der Knotens liegt
+                traversal_node = &traversal.nodes[i];
+                if (i < traversal.size && traversal_node->tMin <= ray.tMax) {
+                    uint32_t child_offset = (nodes[current_node.offset] >> 1) + traversal_node->idx;
+                    node_stack[node_stack_offset++] = OctreeTraversalNode{child_offset, (uint8_t)bounds_stack_offset, traversal_node->tMin};
+                }
+            }
+            traversal_node = &traversal.nodes[0];
+            uint32_t child_offset = (nodes[current_node.offset] >> 1) + traversal_node->idx;
+            current_node = OctreeTraversalNode{child_offset, (uint8_t)bounds_stack_offset, traversal_node->tMin};
+        } else {
+            // Leaf Knoten
+            uint32_t prim_start = nodes[current_node.offset] >> 1;
+            uint32_t prim_end = prim_start + sizes[current_node.offset];
+            for (uint32_t i = prim_start; i < prim_end; i++)
+                // TODO LRU-Cache/Mailboxing, damit man nicht mehrmals dasselbe primitiv testen muss
+                if (leaves[i].get()->Intersect(ray, isect)) hit = true;
+            if (hit && BoundsContainPoint(current_bounds, isect->p)) return true;
+            if (node_stack_offset == 0) break;
+            current_node = node_stack[--node_stack_offset];
+            bounds_stack_offset = current_node.bounds_stack_offset;
+        }
     }
+    return hit;
 }
 
 bool OctreeBasicAccel::IntersectP(const Ray &ray) const {
     ProfilePhase p(Prof::AccelIntersectP);
-    SurfaceInteraction isect;
-    return Intersect(ray, &isect);
+    Float tMin, _;
+    if (!wb.IntersectP(ray, &tMin, &_)) return false;
+    Vector3f invDir = {1/ray.d[0], 1/ray.d[1], 1/ray.d[2]};
+    // boundskey = 29 bits - index in bounds_stack to this nodes parent bounds; 3 bits - node idx [0-7]
+    struct OctreeTraversalNode { uint32_t offset; uint8_t bounds_stack_offset; Float tMin; };
+    struct OctreeTraversalBounds { Bounds3f bounds; Vector3f b_h; };
+    OctreeTraversalNode node_stack[128];
+    OctreeTraversalBounds bounds_stack[64];
+    int node_stack_offset = 0;
+    int bounds_stack_offset = -1;
+    OctreeTraversalNode current_node = OctreeTraversalNode{0, 0, tMin};
+    Bounds3f current_bounds = wb;
+    while (true) {
+        if (bounds_stack_offset >= 0) {
+            current_bounds = 
+                    DivideBounds(bounds_stack[bounds_stack_offset].bounds,
+                                 (current_node.offset - 1) & 7,
+                                 bounds_stack[bounds_stack_offset].b_h);
+        }
+        if ((nodes[current_node.offset] & 1) == 0) {
+            // Innerer Knoten
+            ChildTraversal traversal = FindTraversalOrder(ray, current_bounds, current_node.tMin, invDir);
+            // 3. Schritt: Traversierung der Kindknoten in sortierter Reihenfolge
+            Vector3f b_h = BoundsHalf(current_bounds);
+            bounds_stack[++bounds_stack_offset] = OctreeTraversalBounds{current_bounds, b_h};
+            ChildHit *traversal_node;
+            for (int i = 3; i > 0; i--) {
+                // Kindknoten werden dann nicht mehr traversiert, wenn bereits ein näherer Schnitt ermittelt wurde
+                // Dadurch deckt man auch den Fall ab, dass zwar ein Schnitt gefunden wurde, dieser aber außerhalb der Knotens liegt
+                traversal_node = &traversal.nodes[i];
+                if (i < traversal.size && traversal_node->tMin <= ray.tMax) {
+                    uint32_t child_offset = (nodes[current_node.offset] >> 1) + traversal_node->idx;
+                    node_stack[node_stack_offset++] = OctreeTraversalNode{child_offset, (uint8_t)bounds_stack_offset, traversal_node->tMin};
+                }
+            }
+            traversal_node = &traversal.nodes[0];
+            uint32_t child_offset = (nodes[current_node.offset] >> 1) + traversal_node->idx;
+            current_node = OctreeTraversalNode{child_offset, (uint8_t)bounds_stack_offset, traversal_node->tMin};
+        } else {
+            // Leaf Knoten
+            uint32_t prim_start = nodes[current_node.offset] >> 1;
+            uint32_t prim_end = prim_start + sizes[current_node.offset];
+            for (uint32_t i = prim_start; i < prim_end; i++)
+                // TODO LRU-Cache/Mailboxing, damit man nicht mehrmals dasselbe primitiv testen muss
+                if (leaves[i].get()->IntersectP(ray)) return true;
+            if (node_stack_offset == 0) break;
+            current_node = node_stack[--node_stack_offset];
+            bounds_stack_offset = current_node.bounds_stack_offset;
+        }
+    }
+    return false;
 }
 
 // === VISUALIZATION ===

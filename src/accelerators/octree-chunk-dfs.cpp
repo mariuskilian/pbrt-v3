@@ -68,10 +68,11 @@ bool IsInnerNode(std::array<bftype, DFS_CHUNK_DEPTH> bitfield, int n) {
 
 // === OCTREE STRUCT CREATION ==
 OcChunkDFSAccel::OcChunkDFSAccel(std::vector<std::shared_ptr<Primitive>> p) : primitives(std::move(p)) {
+    printf("Chosen Accelerator: Octree w/ DFS Chunks\n");
+
     oba = OctreeBasicAccel(primitives);
     wb = oba.WorldBound();
 
-    printf("Octree: DFS: Creating DFS Octree!\n");
     if (oba.Nodes().size() > 1) {
         octree.push_back(Chunk{});
         sizes.push_back(0);
@@ -92,7 +93,6 @@ OcChunkDFSAccel::OcChunkDFSAccel(std::vector<std::shared_ptr<Primitive>> p) : pr
             cc_q.pop();
         }
     }
-    printf("Octree: DFS: Creating DFS Octree Done!\n");
     
     //printf("Octree: DFS: Starting visualization!\n")
     //lh_dump("visualize_bfs.obj");
@@ -268,6 +268,8 @@ void OcChunkDFSAccel::RecurseIntersect(const Ray &ray, SurfaceInteraction *isect
     traversal[0] = Node{0, 0, parent_bounds, tMin};
     int traversal_idx = 0;
 
+    Vector3f invDir = {1/ray.d[0], 1/ray.d[1], 1/ray.d[2]};
+
     // TODO For schleife mit max möglichen knoten besser?
     while (traversal_idx >= 0) {
         Node node = traversal[traversal_idx--];
@@ -277,7 +279,7 @@ void OcChunkDFSAccel::RecurseIntersect(const Ray &ray, SurfaceInteraction *isect
             if (node.bitcnt_types >= 0) {
                 // ... with children in same chunk
                 int children_pos = 8 * (node.bitcnt_nodes - node.bitcnt_types);
-                ChildTraversal child_traversal = FindTraversalOrder(ray, node.bounds, node.tMin);
+                ChildTraversal child_traversal = FindTraversalOrder(ray, node.bounds, node.tMin, invDir);
                 Vector3f b_h = BoundsHalf(node.bounds);
                 int base_child_rank_nodes = BitfieldRankOffset(c.nodes, children_pos);
                 for (int i = child_traversal.size - 1; i >= 0; i--) {

@@ -59,7 +59,7 @@ struct alignas(64) BVHChunkBFSAccel::BVHChunkBFS {
     uint32_t primitive_offset;
     uint32_t sizes_offset;
     uint32_t node_info_offset;
-    uint32_t child_chunk_offset;  // TODO now have 32 bits more than 64B :(
+    uint32_t child_chunk_offset; 
     bftype bitfield[chunk_depth];
 };
 
@@ -140,14 +140,13 @@ BVHChunkBFSAccel::BVHChunkBFSAccel(std::vector<std::shared_ptr<Primitive>> p,
                                    int maxPrimsInNode, SplitMethod splitMethod)
     : maxPrimsInNode(std::min(255, maxPrimsInNode)),
       splitMethod(splitMethod) {
+    printf("Chosen Accelerator: BVH w/ BFS Chunks\n");
+
     ProfilePhase _(Prof::AccelConstruction);
     // Let BVHAccel build BVH Structure
-    printf("BVHBFS: Starting original BVH build!\n");
     bvh = new BVHAccel(p, maxPrimsInNode, splitMethod);
     if (!bvh->GetNodes()) return;
-    printf("BVHBFS: Original BVH build done!\n");
     // Chunk struct for building the chunks
-    printf("BVHBFS: Starting build!\n");
     bvh_chunks.push_back(BVHChunkBFS{});
     num_chunks++;
     // We count the initial root node as a chunk pointer inner node
@@ -155,13 +154,9 @@ BVHChunkBFSAccel::BVHChunkBFSAccel(std::vector<std::shared_ptr<Primitive>> p,
     num_inner_nodes++;
     num_chunk_ptr_nodes++;
     Recurse(0, 0, WorldBound(), 1);
-    if (relative_keys) printf("BVHBFS: Build done!\n");
     // Visualisation:
-    // printf("BVHBFS: Starting vis!\n");
     // lh_dump("bvh_vis_bfs.obj");
-    // printf("BVHBFS: Vis BFS done, starting Vis DFS\n");
     // lh_dump("bvh_vis_dfs.obj", true);
-    // printf("BVHBFS: Vis done!\n");
 }
 
 void BVHChunkBFSAccel::Recurse(uint32_t chunk_offset, uint32_t root_node_idx,
@@ -297,6 +292,7 @@ bool BVHChunkBFSAccel::Intersect(const Ray &ray,
     // Variables that update whenever a new chunk is entered
     uint32_t chunk_offset = 99;  // Set to non-0 value to trigger variable updates in first iteration
     const BVHChunkBFS *current_chunk;
+    // More variables
     BVHChunkBFSNode current_node;
     Vector3f k2b;
     Bounds3f root_b;
@@ -378,7 +374,7 @@ bool BVHChunkBFSAccel::Intersect(const Ray &ray,
 
 bool BVHChunkBFSAccel::IntersectP(const Ray &ray) const {
     if (!bvh->GetNodes()) return false;
-    ProfilePhase p(Prof::AccelIntersect);
+    ProfilePhase p(Prof::AccelIntersectP);
     Vector3f invDir(1 / ray.d.x, 1 / ray.d.y, 1 / ray.d.z);
     int dirIsNeg[3] = {invDir.x < 0, invDir.y < 0, invDir.z < 0};
     // Follow ray through BVH nodes to find primitive intersections
@@ -390,6 +386,7 @@ bool BVHChunkBFSAccel::IntersectP(const Ray &ray) const {
     // Variables that update whenever a new chunk is entered
     uint32_t chunk_offset = 99;  // Set to non-0 value to trigger variable updates in first iteration
     const BVHChunkBFS *current_chunk;
+    // More variables
     BVHChunkBFSNode current_node;
     Vector3f k2b;
     Bounds3f root_b;

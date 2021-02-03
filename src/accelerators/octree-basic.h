@@ -74,15 +74,16 @@ const int NUM_SETS_PER_BITFIELD = sizeof(bftype);
 const int BFS_NUM_SETS_PER_CHUNK = NUM_SETS_PER_BITFIELD * BFS_CHUNK_DEPTH;
 const int DFS_NUM_SETS_PER_CHUNK = NUM_SETS_PER_BITFIELD * DFS_CHUNK_DEPTH;
 
-struct ChildHit { int idx; float tMin; };
-struct ChildTraversal { std::array<ChildHit, 4> nodes; int size; };
+struct ChildHit { uint32_t idx; float tMin; };
+struct ChildTraversal { std::array<ChildHit, 4> nodes; uint32_t size; };
 
-Vector3f BoundsHalf(Bounds3f b);
+Vector3f BoundsHalf(Bounds3f &b);
 Bounds3f DivideBounds(Bounds3f b, int idx, Vector3f b_half);
-ChildTraversal FindTraversalOrder(const Ray &ray, Bounds3f b, Float tMin);
+ChildTraversal FindTraversalOrder(const Ray &ray, Bounds3f &b, Float tMin, Vector3f &invDir);
 int Rank(bftype bits, int n = bfsize);
-bool BoundsContainPrim(Bounds3f b, std::shared_ptr<Primitive> p);
-bool MakeLeafNode(Bounds3f b, std::vector<std::shared_ptr<Primitive>>);
+bool BoundsContainPrim(Bounds3f &b, std::shared_ptr<Primitive> p);
+bool BoundsContainPoint(Bounds3f &b, Point3f &p);
+bool MakeLeafNode(Bounds3f &b, std::vector<std::shared_ptr<Primitive>>);
 
 // OcteeAccel Declarations
 
