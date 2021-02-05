@@ -61,6 +61,7 @@
 #include "integrators/directlighting.h"
 #include "integrators/mlt.h"
 #include "integrators/ao.h"
+#include "integrators/metric.h"
 #include "integrators/path.h"
 #include "integrators/sppm.h"
 #include "integrators/volpath.h"
@@ -1704,6 +1705,8 @@ Integrator *RenderOptions::MakeIntegrator() const {
         integrator = CreateMLTIntegrator(IntegratorParams, camera);
     } else if (IntegratorName == "ambientocclusion") {
         integrator = CreateAOIntegrator(IntegratorParams, sampler, camera);
+    } else if (IntegratorName == "metric") {
+        integrator = CreateMetricIntegrator(IntegratorParams, sampler, camera);
     } else if (IntegratorName == "sppm") {
         integrator = CreateSPPMIntegrator(IntegratorParams, camera);
     } else {

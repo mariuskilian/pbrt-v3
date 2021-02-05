@@ -10,24 +10,30 @@
 
 namespace pbrt {
 
+#define COUNT_STATS //debug
+
 #if defined (COUNT_STATS)
-  const bool count_stats = true;
+  static const bool count_stats = true;
+  static std::vector<int> *prim_isects_per_ray;
+  static std::vector<int> *node_isects_per_ray;
+  static std::vector<int> *leafNode_isects_per_ray;
+  static std::vector<int> *chunk_isects_per_ray;
 #else
-  const bool count_stats = false;
+  static const bool count_stats = false;
 #endif
 
 #if defined (REL_KEYS)
-  const bool relative_keys = true;
+  static const bool relative_keys = true;
 #else
-  const bool relative_keys = false;
+  static const bool relative_keys = false;
 #endif
     
 #if defined (CHUNKSIZE64)
-  const int chunksize = 64;
+  static const int chunksize = 64;
 #elif defined (CHUNKSIZE128)
-  const int chunksize = 128;
+  static const int chunksize = 128;
 #elif defined (CHUNKSIZE256)
-  const int chunksize = 256;
+  static const int chunksize = 256;
 #endif
 
 #if defined (BFSIZE8)
@@ -64,9 +70,9 @@ namespace pbrt {
   #endif
 #endif
 
-const int bfsize = 8 * sizeof(bftype);
-const bftype bftzero = (bftype)0;
-const bftype bftone = (bftype)1;
+static const int bfsize = 8 * sizeof(bftype);
+static const bftype bftzero = (bftype)0;
+static const bftype bftone = (bftype)1;
 }
 
 #endif

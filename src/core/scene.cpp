@@ -48,6 +48,11 @@ bool Scene::Intersect(const Ray &ray, SurfaceInteraction *isect) const {
     return aggregate->Intersect(ray, isect);
 }
 
+float Scene::IntersectMetric(const Ray &ray) const {
+    DCHECK_NE(ray.d, Vector3f(0,0,0));
+    return aggregate->IntersectMetric(ray);
+}
+
 bool Scene::IntersectP(const Ray &ray) const {
     ++nShadowTests;
     DCHECK_NE(ray.d, Vector3f(0,0,0));

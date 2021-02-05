@@ -66,6 +66,7 @@ class BVHChunkBFSAccel : public Aggregate {
     Bounds3f WorldBound() const;
     ~BVHChunkBFSAccel();
     bool Intersect(const Ray &ray, SurfaceInteraction *isect) const;
+    float IntersectMetric(const Ray &ray) const;
     bool IntersectP(const Ray &ray) const;
 
   private:
@@ -88,7 +89,6 @@ class BVHChunkBFSAccel : public Aggregate {
     static const int chunk_depth = bytes_free / bytes_per_bf;
     static const int node_pairs_per_chunk = bfsize * chunk_depth / 2;
     static const int node_pairs_per_bitfield = node_pairs_per_chunk / chunk_depth;
-    int num_chunk_layers = 0;
 
     // BVHAccel Private Data
     const int maxPrimsInNode;
