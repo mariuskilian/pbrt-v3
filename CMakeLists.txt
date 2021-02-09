@@ -168,7 +168,6 @@ endif()
 
 FIND_PACKAGE ( Sanitizers )
 FIND_PACKAGE ( Threads )
-FIND_PACKAGE ( Embree 3.12 )
 
 IF(CMAKE_BUILD_TYPE MATCHES RELEASE)
   ADD_DEFINITIONS (-DNDEBUG)
@@ -433,7 +432,6 @@ INCLUDE_DIRECTORIES (
   src/ext/openexr/OpenEXR/IlmImf
   ${CMAKE_BINARY_DIR}/src/ext/openexr/IlmBase/config
   ${CMAKE_BINARY_DIR}/src/ext/openexr/OpenEXR/config
-  ${EMBREE_INCLUDE_DIRS}
 )
 IF(WIN32)
   SET(OPENEXR_LIBS IlmImf Imath Half ${ZLIB_LIBRARY})

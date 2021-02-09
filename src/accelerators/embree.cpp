@@ -104,7 +104,7 @@ void EmbreeAccel::IntersectCallback(
 bool EmbreeAccel::Intersect(const Ray &ray, SurfaceInteraction *isect) const {
     ProfilePhase p(Prof::AccelIntersect);
 
-    IntersectContext context{.ray = &ray, .isect = isect, .hit = false};
+    IntersectContext context{.hit = false, .ray = &ray, .isect = isect};
     rtcInitIntersectContext(&context.rtc);
     RTCRayHit rayhit{.ray =
                          {
@@ -115,14 +115,14 @@ bool EmbreeAccel::Intersect(const Ray &ray, SurfaceInteraction *isect) const {
                              .dir_x = ray.d.x,
                              .dir_y = ray.d.y,
                              .dir_z = ray.d.z,
+                             .time = 0,
                              .tfar = ray.tMax,
                              .mask = 0,
                              .id = 0,
                              .flags = 0,
-                             .time = 0,
                          },
                      .hit = {.geomID = RTC_INVALID_GEOMETRY_ID,
-                             .instID = RTC_INVALID_GEOMETRY_ID}};
+                             .instID = {RTC_INVALID_GEOMETRY_ID}}};
     rtcIntersect1(scene, (RTCIntersectContext *)&context, &rayhit);
     return context.hit;
 }
@@ -156,11 +156,11 @@ bool EmbreeAccel::IntersectP(const Ray &ray) const {
         .dir_x = ray.d.x,
         .dir_y = ray.d.y,
         .dir_z = ray.d.z,
+        .time = 0,
         .tfar = ray.tMax,
         .mask = 0,
         .id = 0,
         .flags = 0,
-        .time = 0,
     };
     rtcOccluded1(scene, (RTCIntersectContext *)&context, &ray_);
     return ray_.tfar == -INFINITY;
@@ -172,3 +172,4 @@ std::shared_ptr<EmbreeAccel> CreateEmbreeAccelerator(
 }
 
 }  // namespace pbrt
+

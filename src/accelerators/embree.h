@@ -79,3 +79,4 @@ std::shared_ptr<EmbreeAccel> CreateEmbreeAccelerator(Primitives prims,
 }  // namespace pbrt
 
 #endif  // PBRT_ACCELERATORS_EMBREE_H
+

@@ -1,3 +1,5 @@
+set -e
+
 SCENE=$1
 RUN=./../../scripts/start_eval.sh
 

@@ -74,8 +74,10 @@ class BVHChunkBFSAccel : public Aggregate {
 
     #if defined (CHUNKSIZE64)
       static const int bytes_free = 24;
+      #define chunk_alignment 64
     #elif defined (CHUNKSIZE128)
       static const int bytes_free = 88;
+      #define chunk_alignment 128
     #endif
     #if defined (BFSIZE8)
       static const int bytes_per_bf = 1;

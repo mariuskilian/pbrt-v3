@@ -92,12 +92,12 @@ STAT_COUNTER("BVH-BFS - Intersects - Chunk/Double Q3", stat_chunkIntersectsDoubl
 STAT_INT_DISTRIBUTION("BVH-BFS - Intersects - Chunk/Distribution", dist_chunkIntersects); // DONE
 #endif
 
-struct alignas(64) BVHChunkBFSAccel::BVHChunkBFS {
+struct alignas(chunk_alignment) BVHChunkBFSAccel::BVHChunkBFS {
     Bounds3f b_root;
     uint32_t primitive_offset;
     uint32_t sizes_offset;
     uint32_t node_info_offset;
-    uint32_t child_chunk_offset; 
+    uint32_t child_chunk_offset;
     bftype bitfield[chunk_depth];
 };
 
@@ -247,10 +247,10 @@ BVHChunkBFSAccel::BVHChunkBFSAccel(std::vector<std::shared_ptr<Primitive>> p,
     // lh_dump("bvh_vis_dfs.obj", true);
 
     mem_bvhbfs = sizeof(*this) + 
-            primitives.size() * sizeof(primitives[0]) +
+            //primitives.size() * sizeof(primitives[0]) +
             bvh_chunks.size() * sizeof(bvh_chunks[0]) + 
-            node_info.size() * sizeof(node_info[0]) + 
-            sizes.size() * sizeof(sizes[0]);
+            node_info.size() * sizeof(node_info[0]); 
+            //sizes.size() * sizeof(sizes[0]);
 }
 
 void BVHChunkBFSAccel::Recurse(uint32_t chunk_offset, uint32_t root_node_idx,
@@ -459,20 +459,25 @@ bool BVHChunkBFSAccel::Intersect(const Ray &ray,
                 // Determine next chunk offset and next nodes offset
                 uint32_t next_chunk_offset;
                 uint32_t next_nodes_offset;
+                Bounds3f next_bounds;
                 if (rank < node_pairs_per_chunk) {
+                    // Real Inner Node
                     next_chunk_offset = chunk_offset;
                     next_nodes_offset = 2 * rank;
+                    next_bounds = b_node;
                 } else {
+                    // Chunk Ptr Inner Node
                     next_chunk_offset = current_chunk->child_chunk_offset + rank - node_pairs_per_chunk;
                     next_nodes_offset = 0;
+                    next_bounds = current_chunk->b_root;
                 }
                 // Add nodes to stack depending on which axis was used to split BVH
                 if (dirIsNeg[ni->axis]) {
-                    node_stack[node_stack_offset++] = BVHChunkBFSNode{next_chunk_offset, next_nodes_offset, b_node};
-                    current_node = BVHChunkBFSNode{next_chunk_offset, next_nodes_offset + 1, b_node};
+                    node_stack[node_stack_offset++] = BVHChunkBFSNode{next_chunk_offset, next_nodes_offset, next_bounds};
+                    current_node = BVHChunkBFSNode{next_chunk_offset, next_nodes_offset + 1, next_bounds};
                 } else {
-                    node_stack[node_stack_offset++] = BVHChunkBFSNode{next_chunk_offset, next_nodes_offset + 1, b_node};
-                    current_node = BVHChunkBFSNode{next_chunk_offset, next_nodes_offset, b_node};
+                    node_stack[node_stack_offset++] = BVHChunkBFSNode{next_chunk_offset, next_nodes_offset + 1, next_bounds};
+                    current_node = BVHChunkBFSNode{next_chunk_offset, next_nodes_offset, next_bounds};
                 }
             } else {
                 // Leaf Node
