@@ -56,6 +56,7 @@ class OcChunkBFSAccel : public Aggregate {
     Bounds3f WorldBound() const { return wb; }
     ~OcChunkBFSAccel();
     bool Intersect(const Ray &ray, SurfaceInteraction *isect) const;
+    float IntersectMetric(const Ray &ray, metric m) const;
     bool IntersectP(const Ray &ray) const;
 
   private:

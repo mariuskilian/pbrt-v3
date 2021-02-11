@@ -45,9 +45,11 @@ namespace pbrt {
 MetricIntegrator::MetricIntegrator(bool cosSample, int ns,
                            std::shared_ptr<const Camera> camera,
                            std::shared_ptr<Sampler> sampler,
-                           const Bounds2i &pixelBounds)
+                           const Bounds2i &pixelBounds,
+                           enum metric m)
     : SamplerIntegrator(camera, sampler, pixelBounds),
-      cosSample(cosSample) {
+      cosSample(cosSample),
+      m(m) {
     nSamples = sampler->RoundCount(ns);
     if (ns != nSamples)
         Warning("Taking %d samples, not %d as specified", nSamples, ns);
@@ -60,12 +62,29 @@ Spectrum MetricIntegrator::Li(const RayDifferential &r, const Scene &scene,
     ProfilePhase p(Prof::SamplerIntegratorLi);
     RayDifferential ray(r);
 
-    return Spectrum(scene.IntersectMetric(ray));
+    return Spectrum(scene.IntersectMetric(ray, m));
 }
 
 MetricIntegrator *CreateMetricIntegrator(const ParamSet &params,
                                  std::shared_ptr<Sampler> sampler,
                                  std::shared_ptr<const Camera> camera) {
+
+    std::string metricName = params.FindOneString("metric", "");
+    metric m;
+    if (metricName == "primitives")
+        m = metric::PRIMITIVES;
+    else if (metricName == "nodes")
+        m = metric::NODES;
+    else if (metricName == "leafnodes")
+        m = metric::LEAFNODES;
+    else if (metricName == "time")
+        m = metric::TIME;
+    else {
+        Warning("BVH split method \"%s\" unknown.  Using \"primitives\".",
+                metricName.c_str());
+        m = metric::PRIMITIVES;
+    }
+
     int np;
     const int *pb = params.FindInt("pixelbounds", &np);
     Bounds2i pixelBounds = camera->film->GetSampleBounds();
@@ -83,7 +102,7 @@ MetricIntegrator *CreateMetricIntegrator(const ParamSet &params,
     bool cosSample = params.FindOneBool("cossample", true);
     int nSamples = params.FindOneInt("nsamples", 64);
     if (PbrtOptions.quickRender) nSamples = 1;
-    return new MetricIntegrator(cosSample, nSamples, camera, sampler, pixelBounds);
+    return new MetricIntegrator(cosSample, nSamples, camera, sampler, pixelBounds, m);
 }
 
 }  // namespace pbrt

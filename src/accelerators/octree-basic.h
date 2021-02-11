@@ -98,6 +98,7 @@ class OctreeBasicAccel : public Aggregate {
     std::vector<std::shared_ptr<Primitive>> &Leaves() { return leaves; }
     ~OctreeBasicAccel();
     bool Intersect(const Ray &ray, SurfaceInteraction *isect) const;
+    float IntersectMetric(const Ray &ray, metric m) const;
     bool IntersectP(const Ray &ray) const;
 
   private:

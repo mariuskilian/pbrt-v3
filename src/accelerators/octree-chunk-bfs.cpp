@@ -256,6 +256,106 @@ bool OcChunkBFSAccel::Intersect(const Ray &ray, SurfaceInteraction *isect) const
     return hit;
 }
 
+float OcChunkBFSAccel::IntersectMetric(const Ray &ray, metric m) const {
+    Float tMin, _;
+    if (!wb.IntersectP(ray, &tMin, &_)) return 0;
+    bool hit = false;
+    float metric_cnt = 0;
+    SurfaceInteraction _isect;
+    SurfaceInteraction *isect = &_isect;
+    Vector3f invDir = {1/ray.d[0], 1/ray.d[1], 1/ray.d[2]};
+    struct OctreeBFSTraversalNode { uint32_t chunk_offset; uint32_t node_idx; uint8_t bounds_stack_offset; Float tMin; };
+    struct OctreeBFSTraversalBounds { Bounds3f bounds; Vector3f b_h; };
+    // Variables that update whenever a new chunk is entered
+    uint chunk_offset = 99; // Set to non-0 value to trigger variable updates in first iteration
+    const Chunk *current_chunk;
+    // More variables
+    OctreeBFSTraversalNode current_node;
+    // Initialize node stack and bounds stack
+    OctreeBFSTraversalNode node_stack[128];
+    OctreeBFSTraversalBounds bounds_stack[64];
+    uint32_t node_stack_offset = 0;
+    uint32_t bounds_stack_offset = 0;
+    Bounds3f current_bounds = wb;
+    // Add root nodes children to stack
+    ChildTraversal traversal = FindTraversalOrder(ray, current_bounds, tMin, invDir);
+    for (int i = 3; i > 0; i--)
+        if (i < traversal.size && traversal.nodes[i].tMin <= ray.tMax)
+            node_stack[node_stack_offset++] = OctreeBFSTraversalNode{0, traversal.nodes[i].idx, 0, traversal.nodes[i].tMin};
+    current_node = OctreeBFSTraversalNode{0, traversal.nodes[0].idx, 0, traversal.nodes[0].tMin};
+    // Add root bounds to bounds stack
+    bounds_stack[bounds_stack_offset] = OctreeBFSTraversalBounds{current_bounds, BoundsHalf(current_bounds)};
+    uint16_t current_rank_offset = 0;
+    uint16_t current_bitfield_idx = 0;
+    while (true) {
+        // If the current node is in a different chunk than the previous node,
+        // update chunk
+        if (current_node.chunk_offset != chunk_offset) {
+            chunk_offset = current_node.chunk_offset;
+            current_chunk = &(octree[chunk_offset]);
+        }
+        
+        current_bounds = DivideBounds(bounds_stack[bounds_stack_offset].bounds,
+                                      current_node.node_idx & 7,
+                                      bounds_stack[bounds_stack_offset].b_h);
+
+        uint16_t bitfield_idx = current_node.node_idx / bfsize;
+        bool is_inner_node = ((current_chunk->nodes[bitfield_idx]
+                >> (current_node.node_idx % bfsize)) & bftone) == bftone;
+        
+        uint32_t rank = RankAll(current_chunk->nodes, current_node.node_idx);
+
+        if (m == metric::NODES) metric_cnt++;
+        if (is_inner_node) {
+            // Inner Node...
+            rank++;
+            ChildTraversal traversal = FindTraversalOrder(ray, current_bounds, current_node.tMin, invDir);
+            // 3. Schritt: Traversierung der Kindknoten in sortierter Reihenfolge
+            Vector3f b_h = BoundsHalf(current_bounds);
+            bounds_stack[++bounds_stack_offset] = OctreeBFSTraversalBounds{current_bounds, b_h};
+            uint32_t child_idx_offset;
+            uint32_t child_chunk_offset;
+            if (rank < BFS_NUM_SETS_PER_CHUNK) {
+                // ... with children in same chunk
+                child_idx_offset = 8 * rank;
+                child_chunk_offset = current_node.chunk_offset;
+            } else {
+                // ... with children in different chunk
+                child_idx_offset = 0;
+                child_chunk_offset = current_chunk->child_chunk_offset + rank - BFS_NUM_SETS_PER_CHUNK;
+            }
+            // Add relevant child nodes to node stack
+            for (int i = 3; i > 0; i--)
+                if (i < traversal.size && traversal.nodes[i].tMin <= ray.tMax)
+                    node_stack[node_stack_offset++] = OctreeBFSTraversalNode{
+                            child_chunk_offset,
+                            child_idx_offset + traversal.nodes[i].idx,
+                            (uint8_t)bounds_stack_offset,
+                            traversal.nodes[i].tMin};
+            current_node = OctreeBFSTraversalNode{
+                    child_chunk_offset,
+                    child_idx_offset + traversal.nodes[0].idx,
+                    (uint8_t)bounds_stack_offset,
+                    traversal.nodes[0].tMin};
+        } else {
+            if (m == metric::LEAFNODES) metric_cnt ++;
+            // Leaf Node
+            int leaf_idx = current_chunk->sizes_offset + current_node.node_idx - rank;
+            uint32_t prim_start = sizes[leaf_idx - 1];
+            uint32_t prim_end = sizes[leaf_idx];
+            for (uint32_t i = prim_start; i < prim_end; i++)
+                // TODO LRU-Cache/Mailboxing, damit man nicht mehrmals dasselbe primitiv testen muss
+                if (leaves[i].get()->Intersect(ray, isect)) hit = true;
+            if (m == metric::PRIMITIVES) metric_cnt += prim_end - prim_start;
+            if (hit && BoundsContainPoint(current_bounds, isect->p)) return true;
+            if (node_stack_offset == 0) break;
+            current_node = node_stack[--node_stack_offset];
+            bounds_stack_offset = current_node.bounds_stack_offset;
+        }
+    }
+    return metric_cnt;
+}
+
 bool OcChunkBFSAccel::IntersectP(const Ray &ray) const {
     ProfilePhase p(Prof::AccelIntersectP);
     Float tMin, _;

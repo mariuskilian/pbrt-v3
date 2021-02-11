@@ -41,6 +41,7 @@
 // integrators/Metric.h*
 #include "pbrt.h"
 #include "integrator.h"
+#include "accelerators/custom_params.h"
 
 namespace pbrt {
 
@@ -51,12 +52,14 @@ class MetricIntegrator : public SamplerIntegrator {
     MetricIntegrator(bool cosSample, int nSamples,
                  std::shared_ptr<const Camera> camera,
                  std::shared_ptr<Sampler> sampler,
-                 const Bounds2i &pixelBounds);
+                 const Bounds2i &pixelBounds,
+                 enum metric m);
     Spectrum Li(const RayDifferential &ray, const Scene &scene,
                 Sampler &sampler, MemoryArena &arena, int depth) const;
  private:
     bool cosSample;
     int nSamples;
+    metric m;
 };
 
 MetricIntegrator *CreateMetricIntegrator(const ParamSet &params,

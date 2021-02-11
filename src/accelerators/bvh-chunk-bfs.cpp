@@ -174,47 +174,44 @@ ChildrenBuildInfo BVHChunkBFSAccel::GetChildrenBuildInfo(
 }
 
 #if defined (COUNT_STATS)
-#define PRIMITIVES "primitives"
-#define LEAFNODES "leafnodes"
-#define ALLNODES "nodes"
-#define CHUNKS "chunks"
-void Calc_Q1_Median_Q3(std::vector<int> data, std::string stat_name) {
-    int stat_q1, stat_median, stat_q3;
-    int num_rays = data.size();
-    std::sort(data.begin(), data.end());
-    // Median
-    int j = num_rays / 2;
-    int i = ((num_rays % 2) == 0) ? j-1 : j;
-    int double_median = data[i] + data[j];
-    // Q1
-    int max_q1 = (i == j) ? i-1 : i;
-    int j_q1 = max_q1 / 2;
-    int i_q1 = ((max_q1 % 2) == 0) ? j-1 : j;
-    int double_q1 = data[i_q1] + data[j_q1];
-    // Q3
-    int min_q3 = (i == j) ? j+1 : j;
-    int j_q3 = min_q3 + j_q1;
-    int i_q3 = min_q3 + i_q1;
-    int double_q3 = data[i_q3] + data[j_q3];
+// enum class stat_name { PRIMS, NODES, LEAVES, CHUNKS }
+// void Calc_Q1_Median_Q3(std::vector<int> data, std::string stat_name) {
+//     int stat_q1, stat_median, stat_q3;
+//     int num_rays = data.size();
+//     std::sort(data.begin(), data.end());
+//     // Median
+//     int j = num_rays / 2;
+//     int i = ((num_rays % 2) == 0) ? j-1 : j;
+//     int double_median = data[i] + data[j];
+//     // Q1
+//     int max_q1 = (i == j) ? i-1 : i;
+//     int j_q1 = max_q1 / 2;
+//     int i_q1 = ((max_q1 % 2) == 0) ? j-1 : j;
+//     int double_q1 = data[i_q1] + data[j_q1];
+//     // Q3
+//     int min_q3 = (i == j) ? j+1 : j;
+//     int j_q3 = min_q3 + j_q1;
+//     int i_q3 = min_q3 + i_q1;
+//     int double_q3 = data[i_q3] + data[j_q3];
 
-    if (stat_name == PRIMITIVES) {
-        stat_primIntersectsDoubleMedian = double_median;
-        stat_primIntersectsDoubleQ1 = double_q1;
-        stat_primIntersectsDoubleQ3 = double_q3;
-    } else if (stat_name == LEAFNODES) {
-        stat_leafNodeIntersectsDoubleMedian = double_median;
-        stat_leafNodeIntersectsDoubleQ1 = double_q1;
-        stat_leafNodeIntersectsDoubleQ3 = double_q3;
-    } else if (stat_name == ALLNODES) {
-        stat_nodeIntersectsDoubleMedian = double_median;
-        stat_nodeIntersectsDoubleQ1 = double_q1;
-        stat_nodeIntersectsDoubleQ3 = double_q3;
-    } else if (stat_name == CHUNKS) {
-        stat_chunkIntersectsDoubleMedian = double_median;
-        stat_chunkIntersectsDoubleQ1 = double_q1;
-        stat_chunkIntersectsDoubleQ3 = double_q3;
-    }
-}
+//     if (stat_name == PRIMS) {
+//         stat_primIntersectsDoubleMedian = double_median;
+//         stat_primIntersectsDoubleQ1 = double_q1;
+//         stat_primIntersectsDoubleQ3 = double_q3;
+//     } else if (stat_name == LEAVES) {
+//         stat_leafNodeIntersectsDoubleMedian = double_median;
+//         stat_leafNodeIntersectsDoubleQ1 = double_q1;
+//         stat_leafNodeIntersectsDoubleQ3 = double_q3;
+//     } else if (stat_name == NODES) {
+//         stat_nodeIntersectsDoubleMedian = double_median;
+//         stat_nodeIntersectsDoubleQ1 = double_q1;
+//         stat_nodeIntersectsDoubleQ3 = double_q3;
+//     } else if (stat_name == CHUNKS) {
+//         stat_chunkIntersectsDoubleMedian = double_median;
+//         stat_chunkIntersectsDoubleQ1 = double_q1;
+//         stat_chunkIntersectsDoubleQ3 = double_q3;
+//     }
+// }
 #endif
 
 // BVHAccel Method Definitions
@@ -525,8 +522,9 @@ bool BVHChunkBFSAccel::Intersect(const Ray &ray,
     return hit;
 }
 
-float BVHChunkBFSAccel::IntersectMetric(const Ray &ray) const {
-    if (!bvh->GetNodes()) return false;
+float BVHChunkBFSAccel::IntersectMetric(const Ray &ray, metric m) const {
+    if (!bvh->GetNodes()) return 0;
+    float metric_cnt = 0;
     SurfaceInteraction _isect;
     SurfaceInteraction *isect = &_isect;
     bool hit = false;
@@ -538,7 +536,6 @@ float BVHChunkBFSAccel::IntersectMetric(const Ray &ray) const {
         uint32_t node_idx;
         Bounds3f root_bounds;
     };
-    uint32_t num_prims = 0;
     // Variables that update whenever a new chunk is entered
     uint32_t chunk_offset = 99;  // Set to non-0 value to trigger variable updates in first iteration
     const BVHChunkBFS *current_chunk;
@@ -581,6 +578,7 @@ float BVHChunkBFSAccel::IntersectMetric(const Ray &ray) const {
         }
         Bounds3f b_node = FindCompressedBounds(root_b, ni->bk, k2b);
         if (b_node.IntersectP(ray, invDir, dirIsNeg)) {
+            if (m == metric::NODES) metric_cnt++;
             if (is_inner_node) {
                 // Update rank to include current node
                 rank += 1;
@@ -603,6 +601,7 @@ float BVHChunkBFSAccel::IntersectMetric(const Ray &ray) const {
                     current_node = BVHChunkBFSNode{next_chunk_offset, next_nodes_offset, b_node};
                 }
             } else {
+                if (m == metric::LEAFNODES) metric_cnt++;
                 // Leaf Node
                 uint32_t sizes_idx = current_chunk->sizes_offset + current_node.node_idx - rank;
                 uint32_t prim_start = current_chunk->primitive_offset +
@@ -610,7 +609,7 @@ float BVHChunkBFSAccel::IntersectMetric(const Ray &ray) const {
                 uint32_t prim_end = current_chunk->primitive_offset + sizes[sizes_idx];
                 for (uint32_t i = prim_start; i < prim_end; i++)
                     if (primitives[i].get()->Intersect(ray, isect)) hit = true;
-                num_prims += prim_end - prim_start;
+                if (m == metric::PRIMITIVES) metric_cnt += prim_end - prim_start;
                 if (node_stack_offset == 0) break;
                 current_node = node_stack[--node_stack_offset];
             }
@@ -620,7 +619,7 @@ float BVHChunkBFSAccel::IntersectMetric(const Ray &ray) const {
             current_node = node_stack[--node_stack_offset];
         }
     }
-    return num_prims;
+    return metric_cnt;
 }
 
 bool BVHChunkBFSAccel::IntersectP(const Ray &ray) const {

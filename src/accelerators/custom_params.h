@@ -10,6 +10,8 @@
 
 namespace pbrt {
 
+enum class metric { PRIMITIVES, NODES, LEAFNODES, TIME };
+
 #define COUNT_STATS //debug
 
 #if defined (COUNT_STATS)

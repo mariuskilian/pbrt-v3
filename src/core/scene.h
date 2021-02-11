@@ -43,6 +43,7 @@
 #include "geometry.h"
 #include "primitive.h"
 #include "light.h"
+#include "accelerators/custom_params.h"
 
 namespace pbrt {
 
@@ -63,7 +64,7 @@ class Scene {
     }
     const Bounds3f &WorldBound() const { return worldBound; }
     bool Intersect(const Ray &ray, SurfaceInteraction *isect) const;
-    float IntersectMetric(const Ray &ray) const;
+    float IntersectMetric(const Ray &ray, metric m) const;
     bool IntersectP(const Ray &ray) const;
     bool IntersectTr(Ray ray, Sampler &sampler, SurfaceInteraction *isect,
                      Spectrum *transmittance) const;

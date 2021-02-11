@@ -41,6 +41,7 @@
 // accelerators/bvh.h*
 #include "pbrt.h"
 #include "primitive.h"
+#include "custom_params.h"
 #include <atomic>
 
 namespace pbrt {
@@ -74,6 +75,7 @@ class BVHAccel : public Aggregate {
     Bounds3f WorldBound() const;
     ~BVHAccel();
     bool Intersect(const Ray &ray, SurfaceInteraction *isect) const;
+    float IntersectMetric(const Ray &ray, metric m) const;
     bool IntersectP(const Ray &ray) const;
 
     LinearBVHNode* GetNodes() { return nodes; }

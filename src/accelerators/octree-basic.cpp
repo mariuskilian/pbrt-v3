@@ -310,6 +310,68 @@ bool OctreeBasicAccel::Intersect(const Ray &ray, SurfaceInteraction *isect) cons
     return hit;
 }
 
+float OctreeBasicAccel::IntersectMetric(const Ray &ray, metric m) const {
+    Float tMin, _;
+    if (!wb.IntersectP(ray, &tMin, &_)) return 0;
+    bool hit = false;
+    float metric_cnt = 0;
+    SurfaceInteraction _isect;
+    SurfaceInteraction *isect = &_isect;
+    Vector3f invDir = {1/ray.d[0], 1/ray.d[1], 1/ray.d[2]};
+    // boundskey = 29 bits - index in bounds_stack to this nodes parent bounds; 3 bits - node idx [0-7]
+    struct OctreeTraversalNode { uint32_t offset; uint8_t bounds_stack_offset; Float tMin; };
+    struct OctreeTraversalBounds { Bounds3f bounds; Vector3f b_h; };
+    OctreeTraversalNode node_stack[128];
+    OctreeTraversalBounds bounds_stack[64];
+    int node_stack_offset = 0;
+    int bounds_stack_offset = -1;
+    OctreeTraversalNode current_node = OctreeTraversalNode{0, 0, tMin};
+    Bounds3f current_bounds = wb;
+    while (true) {
+        if (bounds_stack_offset >= 0) {
+            current_bounds = 
+                    DivideBounds(bounds_stack[bounds_stack_offset].bounds,
+                                 (current_node.offset - 1) & 7,
+                                 bounds_stack[bounds_stack_offset].b_h);
+        }
+        if (m == metric::NODES) metric_cnt++;
+        if ((nodes[current_node.offset] & 1) == 0) {
+            // Innerer Knoten
+            ChildTraversal traversal = FindTraversalOrder(ray, current_bounds, current_node.tMin, invDir);
+            // 3. Schritt: Traversierung der Kindknoten in sortierter Reihenfolge
+            Vector3f b_h = BoundsHalf(current_bounds);
+            bounds_stack[++bounds_stack_offset] = OctreeTraversalBounds{current_bounds, b_h};
+            ChildHit *traversal_node;
+            for (int i = 3; i > 0; i--) {
+                // Kindknoten werden dann nicht mehr traversiert, wenn bereits ein näherer Schnitt ermittelt wurde
+                // Dadurch deckt man auch den Fall ab, dass zwar ein Schnitt gefunden wurde, dieser aber außerhalb der Knotens liegt
+                traversal_node = &traversal.nodes[i];
+                if (i < traversal.size && traversal_node->tMin <= ray.tMax) {
+                    uint32_t child_offset = (nodes[current_node.offset] >> 1) + traversal_node->idx;
+                    node_stack[node_stack_offset++] = OctreeTraversalNode{child_offset, (uint8_t)bounds_stack_offset, traversal_node->tMin};
+                }
+            }
+            traversal_node = &traversal.nodes[0];
+            uint32_t child_offset = (nodes[current_node.offset] >> 1) + traversal_node->idx;
+            current_node = OctreeTraversalNode{child_offset, (uint8_t)bounds_stack_offset, traversal_node->tMin};
+        } else {
+            if (m == metric::LEAFNODES) metric_cnt++;
+            // Leaf Knoten
+            uint32_t prim_start = nodes[current_node.offset] >> 1;
+            uint32_t prim_end = prim_start + sizes[current_node.offset];
+            for (uint32_t i = prim_start; i < prim_end; i++)
+                // TODO LRU-Cache/Mailboxing, damit man nicht mehrmals dasselbe primitiv testen muss
+                if (leaves[i].get()->Intersect(ray, isect)) hit = true;
+            if (m == metric::PRIMITIVES) metric_cnt += prim_end - prim_start;
+            if (hit && BoundsContainPoint(current_bounds, isect->p)) return true;
+            if (node_stack_offset == 0) break;
+            current_node = node_stack[--node_stack_offset];
+            bounds_stack_offset = current_node.bounds_stack_offset;
+        }
+    }
+    return metric_cnt;
+}
+
 bool OctreeBasicAccel::IntersectP(const Ray &ray) const {
     ProfilePhase p(Prof::AccelIntersectP);
     Float tMin, _;
