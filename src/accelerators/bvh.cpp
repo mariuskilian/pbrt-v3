@@ -41,11 +41,28 @@
 
 namespace pbrt {
 
-STAT_MEMORY_COUNTER("Memory/BVH tree", treeBytes);
-STAT_RATIO("BVH/Primitives per leaf node", totalPrimitives, totalLeafNodes);
-STAT_COUNTER("BVH/Interior nodes", interiorNodes);
-STAT_COUNTER("BVH/Leaf nodes", leafNodes);
-STAT_COUNTER("BVH/# Primitive Intersect", num_prim_isect);
+// Stats counted when building structure
+STAT_MEMORY_COUNTER("Memory/BVH tree", bvh_mem); // DONE
+STAT_MEMORY_COUNTER("Memory/BVH topology", bvh_mem_top);
+
+STAT_COUNTER("BVH/Nodes - # Total", bvh_stat_num_nodes);
+STAT_COUNTER("BVH/Nodes - # Leaf", bvh_stat_num_leafNodes);
+STAT_COUNTER("BVH/Primitives - # Total", bvh_stat_num_prims);
+
+// Stats counted when intersecting
+#if defined (COUNT_STATS)
+STAT_COUNTER("BVH - Intersects - Primitive/Total #", bvh_stat_primIntersectsTotal);
+STAT_INT_DISTRIBUTION("BVH - Intersects - Primitive/Distribution", bvh_dist_primIntersects);
+
+STAT_COUNTER("BVH - Intersects - Node - Leaf/Total #", bvh_stat_leafNodeIntersectsTotal);
+STAT_INT_DISTRIBUTION("BVH - Intersects - Node - Leaf/Distribution", bvh_dist_leafNodeIntersects);
+
+STAT_COUNTER("BVH - Intersects - Node - Total/Total #", bvh_stat_nodeIntersectsTotal);
+STAT_INT_DISTRIBUTION("BVH - Intersects - Node - Total/Distribution", bvh_dist_nodeIntersects);
+
+STAT_COUNTER("BVH - Intersects - Chunk/Total #", bvh_stat_chunkIntersectsTotal);
+STAT_INT_DISTRIBUTION("BVH - Intersects - Chunk/Distribution", bvh_dist_chunkIntersects);
+#endif
 
 // BVHAccel Local Declarations
 struct BVHPrimitiveInfo {
@@ -66,9 +83,9 @@ struct BVHBuildNode {
         nPrimitives = n;
         bounds = b;
         children[0] = children[1] = nullptr;
-        ++leafNodes;
-        ++totalLeafNodes;
-        totalPrimitives += n;
+        ++bvh_stat_num_leafNodes;
+        ++bvh_stat_num_nodes;
+        bvh_stat_num_prims += n;
     }
     void InitInterior(int axis, BVHBuildNode *c0, BVHBuildNode *c1) {
         children[0] = c0;
@@ -76,7 +93,7 @@ struct BVHBuildNode {
         bounds = Union(c0->bounds, c1->bounds);
         splitAxis = axis;
         nPrimitives = 0;
-        ++interiorNodes;
+        ++bvh_stat_num_nodes;
     }
     Bounds3f bounds;
     BVHBuildNode *children[2];
@@ -208,8 +225,9 @@ BVHAccel::BVHAccel(std::vector<std::shared_ptr<Primitive>> p,
                               (1024.f * 1024.f));
 
     // Compute representation of depth-first traversal of BVH tree
-    treeBytes += totalNodes * sizeof(LinearBVHNode) + sizeof(*this) +
+    bvh_mem += totalNodes * sizeof(LinearBVHNode) + sizeof(*this) +
                  primitives.size() * sizeof(primitives[0]);
+    bvh_mem_top += totalNodes * sizeof(LinearBVHNode);
     nodes = AllocAligned<LinearBVHNode>(totalNodes);
     int offset = 0;
     flattenBVHTree(root, &offset);
@@ -660,17 +678,35 @@ bool BVHAccel::Intersect(const Ray &ray, SurfaceInteraction *isect) const {
     // Follow ray through BVH nodes to find primitive intersections
     int toVisitOffset = 0, currentNodeIndex = 0;
     int nodesToVisit[64];
+    // === COUNT STATS INITIALIZE BEGIN ===
+    #if defined (COUNT_STATS)
+    int num_prims_intersected = 0;
+    int num_nodes_intersected = 0;
+    int num_leafNodes_intersected = 0;
+    #endif
+    // === COUNT STATS INITIALIZE END ===
     while (true) {
         const LinearBVHNode *node = &nodes[currentNodeIndex];
         // Check ray against BVH node
         if (node->bounds.IntersectP(ray, invDir, dirIsNeg)) {
+            // === COUNT STATS FOR ALL NODES BEGIN ===
+            #if defined (COUNT_STATS)
+            num_nodes_intersected++;
+            #endif
+            // === COUNT STATS FOR ALL NODES END ===
             if (node->nPrimitives > 0) {
                 // Intersect ray with primitives in leaf BVH node
                 for (int i = 0; i < node->nPrimitives; ++i)
                     if (primitives[node->primitivesOffset + i]->Intersect(
                             ray, isect))
                         hit = true;
-                num_prim_isect += node->nPrimitives;
+                // === COUNT STATS FOR LEAF NODES BEGIN ===
+                #if defined (COUNT_STATS)
+                num_prims_intersected += node->nPrimitives;
+                num_leafNodes_intersected++;
+                #endif
+                // === COUNT STATS FOR LEAF NODES END ===
+                bvh_stat_primIntersectsTotal += node->nPrimitives;
                 if (toVisitOffset == 0) break;
                 currentNodeIndex = nodesToVisit[--toVisitOffset];
             } else {
@@ -689,6 +725,21 @@ bool BVHAccel::Intersect(const Ray &ray, SurfaceInteraction *isect) const {
             currentNodeIndex = nodesToVisit[--toVisitOffset];
         }
     }
+    // === COUNT STATS FOR RAY AND TOTAL STATS BEGIN ===
+    #if defined (COUNT_STATS)
+    bvh_stat_primIntersectsTotal += num_prims_intersected;
+    ReportValue(bvh_dist_primIntersects, num_prims_intersected);
+    // prim_isects_per_ray->push_back(num_prims_intersected);
+
+    bvh_stat_nodeIntersectsTotal += num_nodes_intersected;
+    ReportValue(bvh_dist_nodeIntersects, num_nodes_intersected);
+    // node_isects_per_ray->push_back(num_nodes_intersected);
+
+    bvh_stat_leafNodeIntersectsTotal += num_leafNodes_intersected;
+    ReportValue(bvh_dist_leafNodeIntersects, num_leafNodes_intersected);
+    // leafNode_isects_per_ray->push_back(num_leafNodes_intersected);
+    #endif
+    // === COUNT STATS FOR RAY AND TOTAL STATS END ===
     return hit;
 }
 
@@ -716,7 +767,6 @@ float BVHAccel::IntersectMetric(const Ray &ray, metric m) const {
                             ray, isect))
                         hit = true;
                     if (m == metric::PRIMITIVES) metric_cnt += node->nPrimitives;
-                num_prim_isect += node->nPrimitives;
                 if (toVisitOffset == 0) break;
                 currentNodeIndex = nodesToVisit[--toVisitOffset];
             } else {

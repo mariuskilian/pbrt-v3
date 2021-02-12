@@ -40,7 +40,38 @@
 #include <array>
 #include <queue>
 
+#if defined (COUNT_STATS)
+#include <set>
+#endif
+
 namespace pbrt {
+
+// Stats counted when building structure
+STAT_MEMORY_COUNTER("Memory/Octree-BFS tree", octreebfs_mem); // DONE
+STAT_MEMORY_COUNTER("Memory/Octree-BFS topology", octreebfs_mem_top);
+
+STAT_COUNTER("Octree-BFS/Chunks - # Total", octreebfs_stat_num_chunks); // DONE
+STAT_COUNTER("Octree-BFS/Chunks - # Layers (excl. root chunk)", octreebfs_stat_num_chunkLayers); // DONE
+STAT_FLOAT_DISTRIBUTION("Octree-BFS/Chunks - Fill %", octreebfs_dist_chunkFill); // DONE
+
+STAT_COUNTER("Octree-BFS/Nodes - # Total (incl. implicit root node)", octreebfs_stat_num_nodes); // DONE
+STAT_COUNTER("Octree-BFS/Nodes - # Leaf", octreebfs_stat_num_leafNode); // DONE
+STAT_COUNTER("Octree-BFS/Primitives - # Total", octreebfs_stat_num_prims);
+
+// Stats counted when intersecting
+#if defined (COUNT_STATS)
+STAT_COUNTER("Octree-BFS - Intersects - Primitive/Total #", octreebfs_stat_primIntersectsTotal); // DONE
+STAT_INT_DISTRIBUTION("Octree-BFS - Intersects - Primitive/Distribution", octreebfs_dist_primIntersects); // DONE
+
+STAT_COUNTER("Octree-BFS - Intersects - Node - Leaf/Total #", octreebfs_stat_leafNodeIntersectsTotal); // DONE
+STAT_INT_DISTRIBUTION("Octree-BFS - Intersects - Node - Leaf/Distribution", octreebfs_dist_leafNodeIntersects); // DONE
+
+STAT_COUNTER("Octree-BFS - Intersects - Node - Total/Total #", octreebfs_stat_nodeIntersectsTotal); // DONE
+STAT_INT_DISTRIBUTION("Octree-BFS - Intersects - Node - Total/Distribution", octreebfs_dist_nodeIntersects); // DONE
+
+STAT_COUNTER("Octree-BFS - Intersects - Chunk/Total #", octreebfs_stat_chunkIntersectsTotal); // DONE
+STAT_INT_DISTRIBUTION("Octree-BFS - Intersects - Chunk/Distribution", octreebfs_dist_chunkIntersects); // DONE
+#endif
 
 // === HELPERS ===
 
@@ -86,15 +117,28 @@ OcChunkBFSAccel::OcChunkBFSAccel(std::vector<std::shared_ptr<Primitive>> p,
     if (oba.Nodes().size() > 1) {
         octree.push_back(Chunk{});
         sizes.push_back(0);
-        Recurse(0, 0);
+        octreebfs_stat_num_nodes++;
+        Recurse(0, 0, 0);
     }
+
+    octreebfs_mem_top += sizeof(octree) + octree.size() * sizeof(octree[0]);
+
+    octreebfs_mem += sizeof(*this) - sizeof(oba) - sizeof(primitives) +
+            leaves.size() * sizeof(leaves[0]) +
+            sizes.size() * sizeof(sizes[0]) +
+            octree.size() * sizeof(octree[0]);
+
+
     //lh_dump("visualize_bfs.obj");
     //lh_dump_dfs("visualize_dfs.obj");
 }
 
-void OcChunkBFSAccel::Recurse(uint32_t root_node_offset, int chunk_idx) {
+void OcChunkBFSAccel::Recurse(uint32_t root_node_offset, int chunk_idx, int chunk_layer) {
     octree[chunk_idx].child_chunk_offset = octree.size();
     octree[chunk_idx].sizes_offset = sizes.size();
+
+    if (chunk_layer > octreebfs_stat_num_chunkLayers) octreebfs_stat_num_chunkLayers = chunk_layer;
+    octreebfs_stat_num_chunks++;
 
     uint32_t root_child_offset = oba.Nodes()[root_node_offset] >> 1;
     std::queue<uint32_t> bfs_nodes_q;
@@ -115,6 +159,7 @@ void OcChunkBFSAccel::Recurse(uint32_t root_node_offset, int chunk_idx) {
         // When starting a new index, make sure the initial value of the bitcode is 0
         if (bit_pos == 0) octree[chunk_idx].nodes[idx] = bftzero;
 
+        octreebfs_stat_num_nodes++;
         // If it's an inner node, properly reserve its children (new chunk or in current chunk)
         if (is_inner_node) {
             // Inner node
@@ -135,15 +180,20 @@ void OcChunkBFSAccel::Recurse(uint32_t root_node_offset, int chunk_idx) {
             uint32_t prim_end = prim_start + oba.Sizes()[node_offset];
             sizes.push_back(sizes.back() + oba.Sizes()[node_offset]);
             leaves.insert(leaves.end(), oba.Leaves().begin() + prim_start, oba.Leaves().begin() + prim_end);
+            // stats
+            octreebfs_stat_num_leafNode++;
+            octreebfs_stat_num_prims += prim_end - prim_start;
         }
 
         num_nodes++;
         bfs_nodes_q.pop();
     } 
+
+    ReportValue(octreebfs_dist_chunkFill, 100 * (float)num_nodes / (float)(8 * BFS_NUM_SETS_PER_CHUNK));
     
     // Create additional chunks as needed
     for (int i = 0; i < chunk_ptr_nodes.size(); i++)
-        Recurse(chunk_ptr_nodes[i], octree[chunk_idx].child_chunk_offset + i);
+        Recurse(chunk_ptr_nodes[i], octree[chunk_idx].child_chunk_offset + i, chunk_layer + 1);
 
 }
 
@@ -166,6 +216,14 @@ bool OcChunkBFSAccel::Intersect(const Ray &ray, SurfaceInteraction *isect) const
     Float tMin, _;
     if (!wb.IntersectP(ray, &tMin, &_)) return false;
     bool hit = false;
+    // === COUNT STATS INITIALIZE BEGIN ===
+    #if defined (COUNT_STATS)
+    int num_prims_intersected = 0;
+    int num_nodes_intersected = 1;
+    int num_leafNodes_intersected = 0;
+    std::set<int> chunks_intersected;
+    #endif
+    // === COUNT STATS INITIALIZE END ===
     Vector3f invDir = {1/ray.d[0], 1/ray.d[1], 1/ray.d[2]};
     struct OctreeBFSTraversalNode { uint32_t chunk_offset; uint32_t node_idx; uint8_t bounds_stack_offset; Float tMin; };
     struct OctreeBFSTraversalBounds { Bounds3f bounds; Vector3f b_h; };
@@ -196,6 +254,11 @@ bool OcChunkBFSAccel::Intersect(const Ray &ray, SurfaceInteraction *isect) const
         if (current_node.chunk_offset != chunk_offset) {
             chunk_offset = current_node.chunk_offset;
             current_chunk = &(octree[chunk_offset]);
+            // === COUNT STATS BEGIN ===
+            #if defined (COUNT_STATS)
+            chunks_intersected.emplace(chunk_offset);
+            #endif
+            // === COUNT STATS END ===
         }
         
         current_bounds = DivideBounds(bounds_stack[bounds_stack_offset].bounds,
@@ -208,6 +271,12 @@ bool OcChunkBFSAccel::Intersect(const Ray &ray, SurfaceInteraction *isect) const
         
         uint32_t rank = RankAll(current_chunk->nodes, current_node.node_idx);
 
+        // === COUNT STATS FOR ALL NODES BEGIN ===
+        #if defined (COUNT_STATS)
+        num_nodes_intersected++;
+        #endif
+        // === COUNT STATS FOR ALL NODES END ===
+        
         if (is_inner_node) {
             // Inner Node...
             rank++;
@@ -247,12 +316,37 @@ bool OcChunkBFSAccel::Intersect(const Ray &ray, SurfaceInteraction *isect) const
             for (uint32_t i = prim_start; i < prim_end; i++)
                 // TODO LRU-Cache/Mailboxing, damit man nicht mehrmals dasselbe primitiv testen muss
                 if (leaves[i].get()->Intersect(ray, isect)) hit = true;
+            // === COUNT STATS FOR LEAF NODES BEGIN ===
+            #if defined (COUNT_STATS)
+            num_prims_intersected += prim_end - prim_start;
+            num_leafNodes_intersected++;
+            #endif
+            // === COUNT STATS FOR LEAF NODES END ===
             if (hit && BoundsContainPoint(current_bounds, isect->p)) return true;
             if (node_stack_offset == 0) break;
             current_node = node_stack[--node_stack_offset];
             bounds_stack_offset = current_node.bounds_stack_offset;
         }
     }
+    // === COUNT STATS FOR RAY AND TOTAL STATS BEGIN ===
+    #if defined (COUNT_STATS)
+    octreebfs_stat_primIntersectsTotal += num_prims_intersected;
+    ReportValue(octreebfs_dist_primIntersects, num_prims_intersected);
+    // prim_isects_per_ray->push_back(num_prims_intersected);
+
+    octreebfs_stat_nodeIntersectsTotal += num_nodes_intersected;
+    ReportValue(octreebfs_dist_nodeIntersects, num_nodes_intersected);
+    // node_isects_per_ray->push_back(num_nodes_intersected);
+
+    octreebfs_stat_leafNodeIntersectsTotal += num_leafNodes_intersected;
+    ReportValue(octreebfs_dist_leafNodeIntersects, num_leafNodes_intersected);
+    // leafNode_isects_per_ray->push_back(num_leafNodes_intersected);
+
+    octreebfs_stat_chunkIntersectsTotal += chunks_intersected.size();
+    ReportValue(octreebfs_dist_chunkIntersects, chunks_intersected.size());
+    // chunk_isects_per_ray->push_back(chunks_intersected.size());
+    #endif
+    // === COUNT STATS FOR RAY AND TOTAL STATS END ===
     return hit;
 }
 

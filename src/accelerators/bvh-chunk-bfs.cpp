@@ -39,7 +39,6 @@
 #include <queue>
 
 #if defined (COUNT_STATS)
-#include <string>
 #include <set>
 #endif
 
@@ -51,45 +50,46 @@
 namespace pbrt {
 
 // Stats counted when building structure
-STAT_MEMORY_COUNTER("Memory/BVH-BFS tree", mem_bvhbfs);
+STAT_MEMORY_COUNTER("Memory/BVH-BFS tree", bvhbfs_mem); // DONE
+STAT_MEMORY_COUNTER("Memory/BVH-BFS topology", bvhbfs_mem_top);
 
-STAT_COUNTER("BVH-BFS/Chunks", stat_num_chunks); // DONE
-STAT_COUNTER("BVH-BFS/Chunks - # Layers", stat_num_chunkLayers); // DONE
-STAT_FLOAT_DISTRIBUTION("BVH-BFS/Chunks - Fill %", dist_chunkFill); // DONE
+STAT_COUNTER("BVH-BFS/Chunks - # Total", bvhbfs_stat_num_chunks); // DONE
+STAT_COUNTER("BVH-BFS/Chunks - # Layers (excl. root chunk)", bvhbfs_stat_num_chunkLayers); // DONE
+STAT_FLOAT_DISTRIBUTION("BVH-BFS/Chunks - Fill %", bvhbfs_dist_chunkFill); // DONE
 
-STAT_COUNTER("BVH-BFS/Nodes - # Total", stat_num_nodes); // DONE
-STAT_COUNTER("BVH-BFS/Nodes - # Leaf", stat_num_leafNode); // DONE
-STAT_COUNTER("BVH-BFS/Nodes - # Inner", stat_num_innerNode); // DONE
-STAT_COUNTER("BVH-BFS/Nodes - # Inner - Real", stat_num_realInnerNode); // DONE
-STAT_COUNTER("BVH-BFS/Nodes - # Inner - Chunk Ptr", stat_num_chunkPtrNode); // DONE
-
-STAT_COUNTER("BVH-BFS/Primitives - # Total", stat_num_prims);
+STAT_COUNTER("BVH-BFS/Nodes - # Total (incl. implicit root node)", bvhbfs_stat_num_nodes); // DONE
+STAT_COUNTER("BVH-BFS/Nodes - # Leaf", bvhbfs_stat_num_leafNode); // DONE
+STAT_COUNTER("BVH-BFS/Primitives - # Total", bvhbfs_stat_num_prims);
 
 // Stats counted when intersecting
 #if defined (COUNT_STATS)
-STAT_COUNTER("BVH-BFS - Intersects - Primitive/Total #", stat_primIntersectsTotal); // DONE
-STAT_COUNTER("BVH-BFS - Intersects - Primitive/Double Q1", stat_primIntersectsDoubleQ1); // DONE
-STAT_COUNTER("BVH-BFS - Intersects - Primitive/Double Median", stat_primIntersectsDoubleMedian); // DONE
-STAT_COUNTER("BVH-BFS - Intersects - Primitive/Double Q3", stat_primIntersectsDoubleQ3); // DONE
-STAT_INT_DISTRIBUTION("BVH-BFS - Intersects - Primitive/Distribution", dist_primIntersects); // DONE
+STAT_COUNTER("BVH-BFS - Intersects - Primitive/Total #", bvhbfs_stat_primIntersectsTotal); // DONE
+STAT_INT_DISTRIBUTION("BVH-BFS - Intersects - Primitive/Distribution", bvhbfs_dist_primIntersects); // DONE
 
-STAT_COUNTER("BVH-BFS - Intersects - Node - Leaf/Total #", stat_leafNodeIntersectsTotal); // DONE
-STAT_COUNTER("BVH-BFS - Intersects - Node - Leaf/Double Q1", stat_leafNodeIntersectsDoubleQ1); // DONE
-STAT_COUNTER("BVH-BFS - Intersects - Node - Leaf/Double Median", stat_leafNodeIntersectsDoubleMedian); // DONE
-STAT_COUNTER("BVH-BFS - Intersects - Node - Leaf/Double Q3", stat_leafNodeIntersectsDoubleQ3); // DONE
-STAT_INT_DISTRIBUTION("BVH-BFS - Intersects - Node - Leaf/Distribution", dist_leafNodeIntersects); // DONE
+STAT_COUNTER("BVH-BFS - Intersects - Node - Leaf/Total #", bvhbfs_stat_leafNodeIntersectsTotal); // DONE
+STAT_INT_DISTRIBUTION("BVH-BFS - Intersects - Node - Leaf/Distribution", bvhbfs_dist_leafNodeIntersects); // DONE
 
-STAT_COUNTER("BVH-BFS - Intersects - Node - Total/Total #", stat_nodeIntersectsTotal); // DONE
-STAT_COUNTER("BVH-BFS - Intersects - Node - Total/Double Q1", stat_nodeIntersectsDoubleQ1); // DONE
-STAT_COUNTER("BVH-BFS - Intersects - Node - Total/Double Median", stat_nodeIntersectsDoubleMedian); // DONE
-STAT_COUNTER("BVH-BFS - Intersects - Node - Total/Double Q3", stat_nodeIntersectsDoubleQ3); // DONE
-STAT_INT_DISTRIBUTION("BVH-BFS - Intersects - Node - Total/Distribution", dist_nodeIntersects); // DONE
+STAT_COUNTER("BVH-BFS - Intersects - Node - Total/Total #", bvhbfs_stat_nodeIntersectsTotal); // DONE
+STAT_INT_DISTRIBUTION("BVH-BFS - Intersects - Node - Total/Distribution", bvhbfs_dist_nodeIntersects); // DONE
 
-STAT_COUNTER("BVH-BFS - Intersects - Chunk/Total #", stat_chunkIntersectsTotal); // DONE
-STAT_COUNTER("BVH-BFS - Intersects - Chunk/Double Q1", stat_chunkIntersectsDoubleQ1); // DONE
-STAT_COUNTER("BVH-BFS - Intersects - Chunk/Double Median", stat_chunkIntersectsDoubleMedian); // DONE
-STAT_COUNTER("BVH-BFS - Intersects - Chunk/Double Q3", stat_chunkIntersectsDoubleQ3); // DONE
-STAT_INT_DISTRIBUTION("BVH-BFS - Intersects - Chunk/Distribution", dist_chunkIntersects); // DONE
+STAT_COUNTER("BVH-BFS - Intersects - Chunk/Total #", bvhbfs_stat_chunkIntersectsTotal); // DONE
+STAT_INT_DISTRIBUTION("BVH-BFS - Intersects - Chunk/Distribution", bvhbfs_dist_chunkIntersects); // DONE
+
+// STAT_COUNTER("BVH-BFS - Intersects - Primitive/Double Q1", bvhbfs_stat_primIntersectsDoubleQ1); // DONE
+// STAT_COUNTER("BVH-BFS - Intersects - Primitive/Double Median", bvhbfs_stat_primIntersectsDoubleMedian); // DONE
+// STAT_COUNTER("BVH-BFS - Intersects - Primitive/Double Q3", bvhbfs_stat_primIntersectsDoubleQ3); // DONE
+
+// STAT_COUNTER("BVH-BFS - Intersects - Node - Leaf/Double Q1", bvhbfs_stat_leafNodeIntersectsDoubleQ1); // DONE
+// STAT_COUNTER("BVH-BFS - Intersects - Node - Leaf/Double Median", bvhbfs_stat_leafNodeIntersectsDoubleMedian); // DONE
+// STAT_COUNTER("BVH-BFS - Intersects - Node - Leaf/Double Q3", bvhbfs_stat_leafNodeIntersectsDoubleQ3); // DONE
+
+// STAT_COUNTER("BVH-BFS - Intersects - Node - Total/Double Q1", bvhbfs_stat_nodeIntersectsDoubleQ1); // DONE
+// STAT_COUNTER("BVH-BFS - Intersects - Node - Total/Double Median", bvhbfs_stat_nodeIntersectsDoubleMedian); // DONE
+// STAT_COUNTER("BVH-BFS - Intersects - Node - Total/Double Q3", bvhbfs_stat_nodeIntersectsDoubleQ3); // DONE
+
+// STAT_COUNTER("BVH-BFS - Intersects - Chunk/Double Q1", bvhbfs_stat_chunkIntersectsDoubleQ1); // DONE
+// STAT_COUNTER("BVH-BFS - Intersects - Chunk/Double Median", bvhbfs_stat_chunkIntersectsDoubleMedian); // DONE
+// STAT_COUNTER("BVH-BFS - Intersects - Chunk/Double Q3", bvhbfs_stat_chunkIntersectsDoubleQ3); // DONE
 #endif
 
 struct alignas(chunk_alignment) BVHChunkBFSAccel::BVHChunkBFS {
@@ -174,9 +174,9 @@ ChildrenBuildInfo BVHChunkBFSAccel::GetChildrenBuildInfo(
 }
 
 #if defined (COUNT_STATS)
-// enum class stat_name { PRIMS, NODES, LEAVES, CHUNKS }
-// void Calc_Q1_Median_Q3(std::vector<int> data, std::string stat_name) {
-//     int stat_q1, stat_median, stat_q3;
+// enum class bvhbfs_stat_name { PRIMS, NODES, LEAVES, CHUNKS }
+// void Calc_Q1_Median_Q3(std::vector<int> data, std::string bvhbfs_stat_name) {
+//     int bvhbfs_stat_q1, bvhbfs_stat_median, bvhbfs_stat_q3;
 //     int num_rays = data.size();
 //     std::sort(data.begin(), data.end());
 //     // Median
@@ -194,22 +194,22 @@ ChildrenBuildInfo BVHChunkBFSAccel::GetChildrenBuildInfo(
 //     int i_q3 = min_q3 + i_q1;
 //     int double_q3 = data[i_q3] + data[j_q3];
 
-//     if (stat_name == PRIMS) {
-//         stat_primIntersectsDoubleMedian = double_median;
-//         stat_primIntersectsDoubleQ1 = double_q1;
-//         stat_primIntersectsDoubleQ3 = double_q3;
-//     } else if (stat_name == LEAVES) {
-//         stat_leafNodeIntersectsDoubleMedian = double_median;
-//         stat_leafNodeIntersectsDoubleQ1 = double_q1;
-//         stat_leafNodeIntersectsDoubleQ3 = double_q3;
-//     } else if (stat_name == NODES) {
-//         stat_nodeIntersectsDoubleMedian = double_median;
-//         stat_nodeIntersectsDoubleQ1 = double_q1;
-//         stat_nodeIntersectsDoubleQ3 = double_q3;
-//     } else if (stat_name == CHUNKS) {
-//         stat_chunkIntersectsDoubleMedian = double_median;
-//         stat_chunkIntersectsDoubleQ1 = double_q1;
-//         stat_chunkIntersectsDoubleQ3 = double_q3;
+//     if (bvhbfs_stat_name == PRIMS) {
+//         bvhbfs_stat_primIntersectsDoubleMedian = double_median;
+//         bvhbfs_stat_primIntersectsDoubleQ1 = double_q1;
+//         bvhbfs_stat_primIntersectsDoubleQ3 = double_q3;
+//     } else if (bvhbfs_stat_name == LEAVES) {
+//         bvhbfs_stat_leafNodeIntersectsDoubleMedian = double_median;
+//         bvhbfs_stat_leafNodeIntersectsDoubleQ1 = double_q1;
+//         bvhbfs_stat_leafNodeIntersectsDoubleQ3 = double_q3;
+//     } else if (bvhbfs_stat_name == NODES) {
+//         bvhbfs_stat_nodeIntersectsDoubleMedian = double_median;
+//         bvhbfs_stat_nodeIntersectsDoubleQ1 = double_q1;
+//         bvhbfs_stat_nodeIntersectsDoubleQ3 = double_q3;
+//     } else if (bvhbfs_stat_name == CHUNKS) {
+//         bvhbfs_stat_chunkIntersectsDoubleMedian = double_median;
+//         bvhbfs_stat_chunkIntersectsDoubleQ1 = double_q1;
+//         bvhbfs_stat_chunkIntersectsDoubleQ3 = double_q3;
 //     }
 // }
 #endif
@@ -224,8 +224,6 @@ BVHChunkBFSAccel::BVHChunkBFSAccel(std::vector<std::shared_ptr<Primitive>> p,
     #if defined (COUNT_STATS)
     // prim_isects_per_ray = new std::vector<int>();
     #endif
-    
-    stat_num_prims = p.size();
 
     ProfilePhase _(Prof::AccelConstruction);
     // Let BVHAccel build BVH Structure
@@ -233,30 +231,33 @@ BVHChunkBFSAccel::BVHChunkBFSAccel(std::vector<std::shared_ptr<Primitive>> p,
     if (!bvh->GetNodes()) return;
     // Chunk struct for building the chunks
     bvh_chunks.push_back(BVHChunkBFS{});
-    stat_num_chunks++;
     // We count the initial root node as a chunk pointer inner node
-    stat_num_nodes++;
-    stat_num_innerNode++;
-    stat_num_chunkPtrNode++;
-    Recurse(0, 0, WorldBound(), 1);
+    bvhbfs_stat_num_nodes++;
+    Recurse(0, 0, WorldBound(), 0);
     // Visualisation:
     // lh_dump("bvh_vis_bfs.obj");
     // lh_dump("bvh_vis_dfs.obj", true);
 
-    mem_bvhbfs = sizeof(*this) + 
-            //primitives.size() * sizeof(primitives[0]) +
-            bvh_chunks.size() * sizeof(bvh_chunks[0]) + 
-            node_info.size() * sizeof(node_info[0]); 
-            //sizes.size() * sizeof(sizes[0]);
+    bvhbfs_mem_top +=
+            sizeof(bvh_chunks) + bvh_chunks.size() * sizeof(bvh_chunks[0]) + 
+            sizeof(node_info) + node_info.size() * sizeof(node_info[0]); 
+    
+    bvhbfs_mem += sizeof(*this) - sizeof(bvh) + //Removing bvh since its not relevant
+            bvh_chunks.size() * sizeof(bvh_chunks[0]) +
+            node_info.size() * sizeof(node_info[0]) +
+            primitives.size() * sizeof(primitives[0]) +
+            sizes.size() * sizeof(sizes[0]);
+
 }
 
 void BVHChunkBFSAccel::Recurse(uint32_t chunk_offset, uint32_t root_node_idx,
                                Bounds3f b_root, int chunk_layer) {
-    if (chunk_layer > stat_num_chunkLayers) stat_num_chunkLayers = chunk_layer;
+    if (chunk_layer > bvhbfs_stat_num_chunkLayers) bvhbfs_stat_num_chunkLayers = chunk_layer;
     struct Chunk {
         uint32_t root_node_idx;
         Bounds3f b_root;
     };
+    bvhbfs_stat_num_chunks++;
     std::vector<Chunk> chunk_ptr_nodes;
     // === Building Chunk ===
     // Set meta information of chunk
@@ -304,16 +305,12 @@ void BVHChunkBFSAccel::Recurse(uint32_t chunk_offset, uint32_t root_node_idx,
                     node_q.push(BVHChunkBFSNodeBuild{cbi.idx[i], cbi.b_comp[i],
                                                      cbi.b_key[i]});
                 chunk_fill++;
-                stat_num_realInnerNode++;
             } else {
                 // Chunk Ptr Inner Node
                 chunk_ptr_nodes.push_back(
                     Chunk{build_node.node_idx, build_node.b_comp});
                 bvh_chunks.push_back(BVHChunkBFS{});
-                stat_num_chunkPtrNode++;
-                stat_num_chunks++;
             }
-            stat_num_innerNode++;
         } else {
             // Leaf Node
             if (firstLeafInChunk) {
@@ -322,16 +319,17 @@ void BVHChunkBFSAccel::Recurse(uint32_t chunk_offset, uint32_t root_node_idx,
             } else sizes.push_back(sizes.back() + node->nPrimitives);
             for (int i = 0; i < node->nPrimitives; i++)
                 primitives.push_back(bvh->GetPrimitives()[node->primitivesOffset + i]);
-            stat_num_leafNode++;
+            bvhbfs_stat_num_prims += node->nPrimitives;
+            bvhbfs_stat_num_leafNode++;
         }
         node_info.push_back(BVHBFSNodeInfo{build_node.b_key, node->axis});
         // Update node counter and -queue
         nodes_processed++;
         node_q.pop();
-        stat_num_nodes++;
+        bvhbfs_stat_num_nodes++;
     }  // nodes_q
 
-    ReportValue(dist_chunkFill, 100 * (float)nodes_processed / (float)(2 * node_pairs_per_chunk));
+    ReportValue(bvhbfs_dist_chunkFill, 100 * (float)nodes_processed / (float)(2 * node_pairs_per_chunk));
 
     for (int i = 0; i < chunk_ptr_nodes.size(); i++) {
         Recurse(bvh_chunks[chunk_offset].child_chunk_offset + i,
@@ -380,18 +378,18 @@ bool BVHChunkBFSAccel::Intersect(const Ray &ray,
                                  SurfaceInteraction *isect) const {
     if (!bvh->GetNodes()) return false;
     ProfilePhase p(Prof::AccelIntersect);
+    Vector3f invDir(1 / ray.d.x, 1 / ray.d.y, 1 / ray.d.z);
+    int dirIsNeg[3] = {invDir.x < 0, invDir.y < 0, invDir.z < 0};
+    if (!WorldBound().IntersectP(ray, invDir, dirIsNeg)) return false;
     // === COUNT STATS INITIALIZE BEGIN ===
     #if defined (COUNT_STATS)
     int num_prims_intersected = 0;
-    int num_nodes_intersected = 0;
+    int num_nodes_intersected = 1;
     int num_leafNodes_intersected = 0;
-    int num_chunks_intersected = 0;
     std::set<int> chunks_intersected;
     #endif
     // === COUNT STATS INITIALIZE END ===
     bool hit = false;
-    Vector3f invDir(1 / ray.d.x, 1 / ray.d.y, 1 / ray.d.z);
-    int dirIsNeg[3] = {invDir.x < 0, invDir.y < 0, invDir.z < 0};
     // Follow ray through BVH nodes to find primitive intersections
     struct BVHChunkBFSNode {
         uint32_t chunk_idx;
@@ -408,7 +406,6 @@ bool BVHChunkBFSAccel::Intersect(const Ray &ray,
     // Initialize node stack
     BVHChunkBFSNode node_stack[64];
     uint32_t node_stack_offset = 0;
-    if (!WorldBound().IntersectP(ray, invDir, dirIsNeg)) return false;
     if (dirIsNeg[bvh->GetNodes()[0].axis]) {
         node_stack[node_stack_offset++] = BVHChunkBFSNode{0, 0, WorldBound()};
         current_node = BVHChunkBFSNode{0, 1, WorldBound()};
@@ -501,22 +498,21 @@ bool BVHChunkBFSAccel::Intersect(const Ray &ray,
     }
     // === COUNT STATS FOR RAY AND TOTAL STATS BEGIN ===
     #if defined (COUNT_STATS)
-    stat_primIntersectsTotal += num_prims_intersected;
-    ReportValue(dist_primIntersects, num_prims_intersected);
+    bvhbfs_stat_primIntersectsTotal += num_prims_intersected;
+    ReportValue(bvhbfs_dist_primIntersects, num_prims_intersected);
     // prim_isects_per_ray->push_back(num_prims_intersected);
 
-    stat_nodeIntersectsTotal += num_nodes_intersected;
-    ReportValue(dist_nodeIntersects, num_nodes_intersected);
+    bvhbfs_stat_nodeIntersectsTotal += num_nodes_intersected;
+    ReportValue(bvhbfs_dist_nodeIntersects, num_nodes_intersected);
     // node_isects_per_ray->push_back(num_nodes_intersected);
 
-    stat_leafNodeIntersectsTotal += num_leafNodes_intersected;
-    ReportValue(dist_leafNodeIntersects, num_leafNodes_intersected);
+    bvhbfs_stat_leafNodeIntersectsTotal += num_leafNodes_intersected;
+    ReportValue(bvhbfs_dist_leafNodeIntersects, num_leafNodes_intersected);
     // leafNode_isects_per_ray->push_back(num_leafNodes_intersected);
 
-    num_chunks_intersected = chunks_intersected.size();
-    stat_chunkIntersectsTotal += num_chunks_intersected;
-    ReportValue(dist_chunkIntersects, num_chunks_intersected);
-    // chunk_isects_per_ray->push_back(num_chunks_intersected);
+    bvhbfs_stat_chunkIntersectsTotal += chunks_intersected.size();
+    ReportValue(bvhbfs_dist_chunkIntersects, chunks_intersected.size());
+    // chunk_isects_per_ray->push_back(chunks_intersected.size());
     #endif
     // === COUNT STATS FOR RAY AND TOTAL STATS END ===
     return hit;

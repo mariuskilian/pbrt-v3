@@ -40,6 +40,29 @@
 
 namespace pbrt {
 
+// Stats counted when building structure
+STAT_MEMORY_COUNTER("Memory/Octree tree", octree_mem);
+STAT_MEMORY_COUNTER("Memory/Octree topology", octree_mem_top);
+
+STAT_COUNTER("Octree/Nodes - # Total", octree_stat_num_nodes);
+STAT_COUNTER("Octree/Nodes - # Leaf", octree_stat_num_leafNodes);
+STAT_COUNTER("Octree/Primitives - # Total", octree_stat_num_prims);
+
+// Stats counted when intersecting
+#if defined (COUNT_STATS)
+STAT_COUNTER("Octree - Intersects - Primitive/Total #", octree_stat_primIntersectsTotal);
+STAT_INT_DISTRIBUTION("Octree - Intersects - Primitive/Distribution", octree_dist_primIntersects);
+
+STAT_COUNTER("Octree - Intersects - Node - Leaf/Total #", octree_stat_leafNodeIntersectsTotal);
+STAT_INT_DISTRIBUTION("Octree - Intersects - Node - Leaf/Distribution", octree_dist_leafNodeIntersects);
+
+STAT_COUNTER("Octree - Intersects - Node - Total/Total #", octree_stat_nodeIntersectsTotal);
+STAT_INT_DISTRIBUTION("Octree - Intersects - Node - Total/Distribution", octree_dist_nodeIntersects);
+
+STAT_COUNTER("Octree - Intersects - Chunk/Total #", octree_stat_chunkIntersectsTotal);
+STAT_INT_DISTRIBUTION("Octree - Intersects - Chunk/Distribution", octree_dist_chunkIntersects);
+#endif
+
 // === HELPERS ===
 
 Vector3f BoundsHalf(Bounds3f &b) {
@@ -205,6 +228,13 @@ OctreeBasicAccel::OctreeBasicAccel(std::vector<std::shared_ptr<Primitive>> p, in
     sizes.push_back(0);
     Recurse(0, primitives, wb, 0);
 
+    octree_mem += sizeof(*this) - sizeof(primitives) +
+            nodes.size() * sizeof(nodes[0]) +
+            sizes.size() * sizeof(sizes[0]) +
+            leaves.size() * sizeof(leaves[0]);
+    octree_mem_top += sizeof(nodes) + nodes.size() * sizeof(nodes[0]);
+
+
     // lh_dump("visualize_basic.obj");
 }
 
@@ -219,6 +249,8 @@ void OctreeBasicAccel::Recurse(int offset, std::vector<std::shared_ptr<Primitive
         if (BoundsContainPrim(bounds, p)) prims.push_back(p);
     }
 
+    octree_stat_num_nodes++;
+
     if (prims.size() > MAX_PRIMS && !MakeLeafNode(bounds, prims)) { // Inner node
         uint32_t offset_children = nodes.size();
 
@@ -231,10 +263,11 @@ void OctreeBasicAccel::Recurse(int offset, std::vector<std::shared_ptr<Primitive
         Vector3f b_h = BoundsHalf(bounds);
         for (uint32_t i = 0; i < 8; i++) Recurse(offset_children + i, prims, DivideBounds(bounds, i, b_h), depth + 1);
     } else { // Leaf node
+        octree_stat_num_leafNodes++;
+        octree_stat_num_prims += prims.size();
         uint32_t offset_leaves = leaves.size();
 
         leaves.insert(leaves.end(), prims.begin(), prims.end());
-
         nodes[offset] = offset_leaves << 1 | 1;
         sizes[offset] = prims.size();
     }
@@ -258,8 +291,14 @@ bool OctreeBasicAccel::Intersect(const Ray &ray, SurfaceInteraction *isect) cons
     Float tMin, _;
     if (!wb.IntersectP(ray, &tMin, &_)) return false;
     bool hit = false;
+    // === COUNT STATS INITIALIZE BEGIN ===
+    #if defined (COUNT_STATS)
+    int num_prims_intersected = 0;
+    int num_nodes_intersected = 0;
+    int num_leafNodes_intersected = 0;
+    #endif
+    // === COUNT STATS INITIALIZE END ===
     Vector3f invDir = {1/ray.d[0], 1/ray.d[1], 1/ray.d[2]};
-    // boundskey = 29 bits - index in bounds_stack to this nodes parent bounds; 3 bits - node idx [0-7]
     struct OctreeTraversalNode { uint32_t offset; uint8_t bounds_stack_offset; Float tMin; };
     struct OctreeTraversalBounds { Bounds3f bounds; Vector3f b_h; };
     OctreeTraversalNode node_stack[128];
@@ -275,6 +314,11 @@ bool OctreeBasicAccel::Intersect(const Ray &ray, SurfaceInteraction *isect) cons
                                  (current_node.offset - 1) & 7,
                                  bounds_stack[bounds_stack_offset].b_h);
         }
+        // === COUNT STATS FOR ALL NODES BEGIN ===
+        #if defined (COUNT_STATS)
+        num_nodes_intersected++;
+        #endif
+        // === COUNT STATS FOR ALL NODES END ===
         if ((nodes[current_node.offset] & 1) == 0) {
             // Innerer Knoten
             ChildTraversal traversal = FindTraversalOrder(ray, current_bounds, current_node.tMin, invDir);
@@ -301,12 +345,33 @@ bool OctreeBasicAccel::Intersect(const Ray &ray, SurfaceInteraction *isect) cons
             for (uint32_t i = prim_start; i < prim_end; i++)
                 // TODO LRU-Cache/Mailboxing, damit man nicht mehrmals dasselbe primitiv testen muss
                 if (leaves[i].get()->Intersect(ray, isect)) hit = true;
+            // === COUNT STATS FOR LEAF NODES BEGIN ===
+            #if defined (COUNT_STATS)
+            num_prims_intersected += prim_end - prim_start;
+            num_leafNodes_intersected++;
+            #endif
+            // === COUNT STATS FOR LEAF NODES END ===
             if (hit && BoundsContainPoint(current_bounds, isect->p)) return true;
             if (node_stack_offset == 0) break;
             current_node = node_stack[--node_stack_offset];
             bounds_stack_offset = current_node.bounds_stack_offset;
         }
     }
+    // === COUNT STATS FOR RAY AND TOTAL STATS BEGIN ===
+    #if defined (COUNT_STATS)
+    octree_stat_primIntersectsTotal += num_prims_intersected;
+    ReportValue(octree_dist_primIntersects, num_prims_intersected);
+    // prim_isects_per_ray->push_back(num_prims_intersected);
+
+    octree_stat_nodeIntersectsTotal += num_nodes_intersected;
+    ReportValue(octree_dist_nodeIntersects, num_nodes_intersected);
+    // node_isects_per_ray->push_back(num_nodes_intersected);
+
+    octree_stat_leafNodeIntersectsTotal += num_leafNodes_intersected;
+    ReportValue(octree_dist_leafNodeIntersects, num_leafNodes_intersected);
+    // leafNode_isects_per_ray->push_back(num_leafNodes_intersected);
+    #endif
+    // === COUNT STATS FOR RAY AND TOTAL STATS END ===
     return hit;
 }
 
