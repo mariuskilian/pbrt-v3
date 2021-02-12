@@ -322,7 +322,7 @@ bool OcChunkBFSAccel::Intersect(const Ray &ray, SurfaceInteraction *isect) const
             num_leafNodes_intersected++;
             #endif
             // === COUNT STATS FOR LEAF NODES END ===
-            if (hit && BoundsContainPoint(current_bounds, isect->p)) return true;
+            if (hit && BoundsContainPoint(current_bounds, isect->p)) break;
             if (node_stack_offset == 0) break;
             current_node = node_stack[--node_stack_offset];
             bounds_stack_offset = current_node.bounds_stack_offset;
@@ -441,7 +441,7 @@ float OcChunkBFSAccel::IntersectMetric(const Ray &ray, metric m) const {
                 // TODO LRU-Cache/Mailboxing, damit man nicht mehrmals dasselbe primitiv testen muss
                 if (leaves[i].get()->Intersect(ray, isect)) hit = true;
             if (m == metric::PRIMITIVES) metric_cnt += prim_end - prim_start;
-            if (hit && BoundsContainPoint(current_bounds, isect->p)) return true;
+            if (hit && BoundsContainPoint(current_bounds, isect->p)) break;
             if (node_stack_offset == 0) break;
             current_node = node_stack[--node_stack_offset];
             bounds_stack_offset = current_node.bounds_stack_offset;

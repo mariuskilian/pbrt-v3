@@ -37,6 +37,7 @@
 #include "interaction.h"
 #include "paramset.h"
 #include "stats.h"
+#include "custom_params.h"
 
 namespace pbrt {
 
@@ -86,6 +87,7 @@ struct IntersectContext {
     bool hit;
     const Ray *ray;
     SurfaceInteraction *isect;
+    float metric_cnt;
 };
 
 void EmbreeAccel::IntersectCallback(
@@ -99,12 +101,13 @@ void EmbreeAccel::IntersectCallback(
         RTCRayN *ray = RTCRayHitN_RayN(args->rayhit, args->N);
         RTCRayN_tfar(ray, args->N, 0) = context->ray->tMax;
     }
+    context->metric_cnt++;
 }
 
 bool EmbreeAccel::Intersect(const Ray &ray, SurfaceInteraction *isect) const {
     ProfilePhase p(Prof::AccelIntersect);
 
-    IntersectContext context{.hit = false, .ray = &ray, .isect = isect};
+    IntersectContext context{.hit = false, .ray = &ray, .isect = isect, .metric_cnt = 0.0};
     rtcInitIntersectContext(&context.rtc);
     RTCRayHit rayhit{.ray =
                          {
@@ -125,6 +128,35 @@ bool EmbreeAccel::Intersect(const Ray &ray, SurfaceInteraction *isect) const {
                              .instID = {RTC_INVALID_GEOMETRY_ID}}};
     rtcIntersect1(scene, (RTCIntersectContext *)&context, &rayhit);
     return context.hit;
+}
+
+float EmbreeAccel::IntersectMetric(const Ray &ray, metric m) const {
+    ProfilePhase p(Prof::AccelIntersect);
+
+    SurfaceInteraction _isect;
+    SurfaceInteraction* isect = &_isect;
+
+    IntersectContext context{.hit = false, .ray = &ray, .isect = isect, .metric_cnt = 0.0};
+    rtcInitIntersectContext(&context.rtc);
+    RTCRayHit rayhit{.ray =
+                         {
+                             .org_x = ray.o.x,
+                             .org_y = ray.o.y,
+                             .org_z = ray.o.z,
+                             .tnear = 0,
+                             .dir_x = ray.d.x,
+                             .dir_y = ray.d.y,
+                             .dir_z = ray.d.z,
+                             .time = 0,
+                             .tfar = ray.tMax,
+                             .mask = 0,
+                             .id = 0,
+                             .flags = 0,
+                         },
+                     .hit = {.geomID = RTC_INVALID_GEOMETRY_ID,
+                             .instID = {RTC_INVALID_GEOMETRY_ID}}};
+    rtcIntersect1(scene, (RTCIntersectContext *)&context, &rayhit);
+    return context.metric_cnt;
 }
 
 struct OccludedContext {

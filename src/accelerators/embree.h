@@ -62,6 +62,7 @@ class EmbreeAccel : public Aggregate {
     static void IntersectCallback(
         const struct RTCIntersectFunctionNArguments *args);
     bool Intersect(const Ray &ray, SurfaceInteraction *isect) const;
+    float IntersectMetric(const Ray &ray, metric m) const;
 
     static void OccludedCallback(
         const struct RTCOccludedFunctionNArguments *args);

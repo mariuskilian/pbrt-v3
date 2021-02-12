@@ -61,14 +61,13 @@ Spectrum MetricIntegrator::Li(const RayDifferential &r, const Scene &scene,
                           int depth) const {
     ProfilePhase p(Prof::SamplerIntegratorLi);
     RayDifferential ray(r);
-
+    
     return Spectrum(scene.IntersectMetric(ray, m));
 }
 
 MetricIntegrator *CreateMetricIntegrator(const ParamSet &params,
                                  std::shared_ptr<Sampler> sampler,
                                  std::shared_ptr<const Camera> camera) {
-
     std::string metricName = params.FindOneString("metric", "");
     metric m;
     if (metricName == "primitives")
