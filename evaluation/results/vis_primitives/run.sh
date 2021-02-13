@@ -1,8 +1,9 @@
 set -e
 
 SCENE=$1
+METRIC=$2
 
-INTGR="metric=primitives"
+INTGR="metric=$METRIC"
 RUN="./../../scripts/start_eval.sh $INTGR $SCENE"
 SOURCE=../../..
 BUILD=$SOURCE/build/Evaluation
@@ -22,7 +23,7 @@ make -C $BUILD -j
 
 $RUN "bvh"
 $RUN "bvh-bfs"
-$RUN "octree"
 $RUN "octree-bfs"
+$RUN "embree"
 
 python3 ../../scripts/python-scripts/normalize_metrics.py $SCENE-$INTGR
