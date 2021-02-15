@@ -106,15 +106,15 @@ bool IsInnerNode(std::array<bftype, BFS_CHUNK_DEPTH> bitfield, int n) {
 }
 
 // === OCTREE STRUCT CREATION ==
-OcChunkBFSAccel::OcChunkBFSAccel(std::vector<std::shared_ptr<Primitive>> p,
-        int max_prims, float prm_thresh, float vol_thresh) 
+OcChunkBFSAccel::OcChunkBFSAccel(std::vector<std::shared_ptr<Primitive>> p, const ParamSet &ps) 
         : primitives(std::move(p)) {
     printf("Chosen Accelerator: Octree w/ BFS Chunks\n");
 
-    oba = OctreeBasicAccel(primitives, max_prims, prm_thresh, vol_thresh);
-    wb = oba.WorldBound();
+    oba = CreateOctreeBasicAccelerator(primitives, ps);
+
+    wb = oba->WorldBound();
     
-    if (oba.Nodes().size() > 1) {
+    if (oba->Nodes().size() > 1) {
         octree.push_back(Chunk{});
         sizes.push_back(0);
         octreebfs_stat_num_nodes++;
@@ -140,7 +140,7 @@ void OcChunkBFSAccel::Recurse(uint32_t root_node_offset, int chunk_idx, int chun
     if (chunk_layer > octreebfs_stat_num_chunkLayers) octreebfs_stat_num_chunkLayers = chunk_layer;
     octreebfs_stat_num_chunks++;
 
-    uint32_t root_child_offset = oba.Nodes()[root_node_offset] >> 1;
+    uint32_t root_child_offset = oba->Nodes()[root_node_offset] >> 1;
     std::queue<uint32_t> bfs_nodes_q;
     for (int i = 0; i < 8; i++) bfs_nodes_q.push(root_child_offset + i);
 
@@ -152,7 +152,7 @@ void OcChunkBFSAccel::Recurse(uint32_t root_node_offset, int chunk_idx, int chun
     bool is_inner_node;
     while (!bfs_nodes_q.empty()) {
         node_offset = bfs_nodes_q.front();
-        is_inner_node = (oba.Nodes()[node_offset] & 1) == 0;
+        is_inner_node = (oba->Nodes()[node_offset] & 1) == 0;
             
         int idx = num_nodes / bfsize;
         int bit_pos = num_nodes % bfsize;
@@ -169,17 +169,17 @@ void OcChunkBFSAccel::Recurse(uint32_t root_node_offset, int chunk_idx, int chun
                 octree.push_back(Chunk{}); // reserve chunk slot
             } else {
                 // Chunk has space for children
-                uint32_t child_offset = oba.Nodes()[node_offset] >> 1;
+                uint32_t child_offset = oba->Nodes()[node_offset] >> 1;
                 for (int i = 0; i < 8; i++) { bfs_nodes_q.push(child_offset + i); }
                 chunk_fill_size++;
             }
             octree[chunk_idx].nodes[idx] |= bftone << bit_pos;
         } else {
             // Leaf Node
-            uint32_t prim_start = oba.Nodes()[node_offset] >> 1;
-            uint32_t prim_end = prim_start + oba.Sizes()[node_offset];
-            sizes.push_back(sizes.back() + oba.Sizes()[node_offset]);
-            leaves.insert(leaves.end(), oba.Leaves().begin() + prim_start, oba.Leaves().begin() + prim_end);
+            uint32_t prim_start = oba->Nodes()[node_offset] >> 1;
+            uint32_t prim_end = prim_start + oba->Sizes()[node_offset];
+            sizes.push_back(sizes.back() + oba->Sizes()[node_offset]);
+            leaves.insert(leaves.end(), oba->Leaves().begin() + prim_start, oba->Leaves().begin() + prim_end);
             // stats
             octreebfs_stat_num_leafNode++;
             octreebfs_stat_num_prims += prim_end - prim_start;
@@ -198,11 +198,7 @@ void OcChunkBFSAccel::Recurse(uint32_t root_node_offset, int chunk_idx, int chun
 }
 
 std::shared_ptr<OcChunkBFSAccel> CreateOcChunkBFSAccelerator(std::vector<std::shared_ptr<Primitive>> prims, const ParamSet &ps) {
-    int max_prims = ps.FindOneInt("maxprims", 32);
-    float prm_thresh = ps.FindOneFloat("prmthresh", 0.9);
-    float vol_thresh = ps.FindOneFloat("volthresh", 0.9);
-
-    return std::make_shared<OcChunkBFSAccel>(std::move(prims), max_prims, prm_thresh, vol_thresh);
+    return std::make_shared<OcChunkBFSAccel>(std::move(prims), ps);
 }
 
 OcChunkBFSAccel::~OcChunkBFSAccel() { //FreeAligned(nodes2);

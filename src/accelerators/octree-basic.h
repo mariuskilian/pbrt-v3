@@ -49,6 +49,7 @@ namespace pbrt {
 static int MAX_PRIMS;
 static Float PRM_THRESH;
 static Float VOL_THRESH;
+static Float MULT_THRESH;
 
 // Size of chunk array of type BITFIELD_X below
 
@@ -91,7 +92,7 @@ class OctreeBasicAccel : public Aggregate {
   public:
     // KdTreeAccel Public Methods
     OctreeBasicAccel();
-    OctreeBasicAccel(std::vector<std::shared_ptr<Primitive>> p, int maxPrims = 32, float prm_thresh = 0.9, float vol_thresh = 0.9);
+    OctreeBasicAccel(std::vector<std::shared_ptr<Primitive>> p);
     Bounds3f WorldBound() const { return wb; }
     std::vector<uint32_t> &Nodes() { return nodes; }
     std::vector<uint32_t> &Sizes() { return sizes; }

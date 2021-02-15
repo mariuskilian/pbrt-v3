@@ -52,19 +52,20 @@ class OcChunkBFSAccel : public Aggregate {
 
   public:
     // KdTreeAccel Public Methods
-    OcChunkBFSAccel(std::vector<std::shared_ptr<Primitive>> p, int max_prims = 32, float prm_thresh = 0.9, float vol_thresh = 0.9);
+    OcChunkBFSAccel(std::vector<std::shared_ptr<Primitive>> p, const ParamSet &ps);
     Bounds3f WorldBound() const { return wb; }
     ~OcChunkBFSAccel();
     bool Intersect(const Ray &ray, SurfaceInteraction *isect) const;
     float IntersectMetric(const Ray &ray, metric m) const;
     bool IntersectP(const Ray &ray) const;
+    
+    std::shared_ptr<OctreeBasicAccel> oba;
 
   private:
 
     // OctreeAccel Private Data
     std::vector<std::shared_ptr<Primitive>> primitives;
     Bounds3f wb; // World Bounds
-    OctreeBasicAccel oba;
 
     struct Node { int bitcnt; Bounds3f bounds; Float tMin; };
 

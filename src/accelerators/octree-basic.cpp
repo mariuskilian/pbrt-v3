@@ -178,12 +178,12 @@ bool OctreeBasicAccel::MakeLeafNode(Bounds3f &b, uint32_t prim_count) {
         });
     // Now create bounds surrounding this cluster of primitives
     Bounds3f b_cluster;
-    for (int i = 0; i < 3; i++) { b_cluster.pMin[i] = FLT_MAX; b_cluster.pMax[i] = -FLT_MAX; }
+    for (int i = 0; i < 3; i++) { b_cluster.pMin[i] = b.pMax[i]; b_cluster.pMax[i] = b.pMin[i]; }
     for (int i = 0; i < num_cluster_prims; i++) {
-        Bounds3f b = primitives[i]->WorldBound();
+        Bounds3f b_prim = primitives[i]->WorldBound();
         for (int i = 0; i < 3; i++) {
-            if (b.pMin[i] < b_cluster.pMin[i]) b_cluster.pMin[i] = b.pMin[i];
-            if (b.pMax[i] > b_cluster.pMax[i]) b_cluster.pMax[i] = b.pMax[i];
+            if (b_prim.pMin[i] < b_cluster.pMin[i]) b_cluster.pMin[i] = b_prim.pMin[i];
+            if (b_prim.pMax[i] > b_cluster.pMax[i]) b_cluster.pMax[i] = b_prim.pMax[i];
         }
     }
     // Limit the cluster bounds to the current node's bounds
@@ -198,25 +198,20 @@ bool OctreeBasicAccel::MakeLeafNode(Bounds3f &b, uint32_t prim_count) {
 
 // === OCTREE STRUCTURE CREATION ===
 
-OctreeBasicAccel::OctreeBasicAccel(std::vector<std::shared_ptr<Primitive>> p, int max_prims, float prm_thresh, float vol_thresh)
+OctreeBasicAccel::OctreeBasicAccel(std::vector<std::shared_ptr<Primitive>> p)
         : primitives(std::move(p)) {
     printf("Chosen Accelerator: Octree\n");
-
-    MAX_PRIMS = max_prims;
-    PRM_THRESH = prm_thresh;
-    VOL_THRESH = vol_thresh;
 
     for (int i = 0; i < 3; i++) { wb.pMin[i] = FLT_MAX; wb.pMax[i] = -FLT_MAX; }
 
     // Determine world bounds
     for (int i = 0; i < primitives.size(); i++) {
-        Bounds3f b = primitives.at(i)->WorldBound();
+        Bounds3f b = primitives[i]->WorldBound();
         for (int i = 0; i < 3; i++) {
             if (b.pMin[i] < wb.pMin[i]) wb.pMin[i] = b.pMin[i];
             if (b.pMax[i] > wb.pMax[i]) wb.pMax[i] = b.pMax[i];
         }
     }
-
     // Set all dimension sizes of World Bounds to same size
     Vector3f size;
     Float max_size = 0;
@@ -224,16 +219,63 @@ OctreeBasicAccel::OctreeBasicAccel(std::vector<std::shared_ptr<Primitive>> p, in
         size[i] = wb.pMax[i] - wb.pMin[i];
         if (size[i] > max_size) max_size = size[i];
     }
-
     for (int i = 0; i < 3; i++) {
         Float diff = (max_size - size[i]) / 2;
         wb.pMin[i] -= diff;
         wb.pMax[i] += diff;
     }
-    
+
+    struct OctreeBuildNode { uint32_t offset; uint32_t parent_prim_count; Bounds3f bounds; };
+    OctreeBuildNode node_stack[128];
+    OctreeBuildNode current_node = OctreeBuildNode{0, (uint32_t)primitives.size(), wb};
     nodes.push_back(0);
     sizes.push_back(0);
-    Recurse(0, primitives.size(), wb, 0);
+    uint32_t stack_size = 0;
+    while (true) {
+        octree_stat_num_nodes++;
+
+        uint32_t prim_count = 0;
+        std::partition(primitives.begin(), primitives.begin() + current_node.parent_prim_count,
+                [&current_node, &prim_count](std::shared_ptr<Primitive> p){
+                    if (BoundsContainPrim(current_node.bounds, p)) { prim_count++; return true; }
+                    return false; });
+
+        // Determine whether or not this node should be an inner node or a leaf node
+        uint32_t children_prim_count = 0;
+        Vector3f b_h = BoundsHalf(current_node.bounds);
+        for (int i = 0; i < prim_count; i++) {
+            Bounds3f b_prim = primitives[i]->WorldBound();
+            int prim_mult = 1; // how many times this prim gets multiplied
+            for (int j = 0; j < 3; j++) if (b_prim.pMin[j] <= b_h[j] && b_prim.pMax[j] >= b_h[j]) prim_mult *= 2;
+            children_prim_count += prim_mult;
+        }
+        bool make_leaf_node = children_prim_count > MULT_THRESH * prim_count;
+
+        if (prim_count > MAX_PRIMS && !make_leaf_node) { // Inner node
+            uint32_t offset_children = nodes.size();
+
+            std::vector<uint32_t> nodes_children = {0, 0, 0, 0, 0, 0, 0, 0};
+            std::vector<uint32_t> sizes_children = {0, 0, 0, 0, 0, 0, 0, 0};
+            nodes.insert(nodes.end(), nodes_children.begin(), nodes_children.end());
+            sizes.insert(sizes.end(), sizes_children.begin(), sizes_children.end());
+
+            nodes[current_node.offset] = offset_children << 1 | 0;
+            for (uint32_t i = 0; i < 7; i++)
+                node_stack[stack_size++] = OctreeBuildNode{offset_children + i, prim_count, DivideBounds(current_node.bounds, i, b_h)};
+            current_node = OctreeBuildNode{offset_children + 7, prim_count, DivideBounds(current_node.bounds, 7, b_h)};
+        } else { // Leaf node
+            octree_stat_num_leafNodes++;
+            octree_stat_num_prims += prim_count;
+            uint32_t offset_leaves = leaves.size();
+
+            leaves.insert(leaves.end(), primitives.begin(), primitives.begin() + prim_count);
+            nodes[current_node.offset] = offset_leaves << 1 | 1;
+            sizes[current_node.offset] = prim_count;
+
+            if (stack_size == 0) break;
+            current_node = node_stack[--stack_size];
+        }
+    }
 
     octree_mem += sizeof(*this) - sizeof(primitives) +
             nodes.size() * sizeof(nodes[0]) +
@@ -285,9 +327,10 @@ void OctreeBasicAccel::Recurse(int offset, uint32_t parent_prim_count, Bounds3f 
 
 std::shared_ptr<OctreeBasicAccel> CreateOctreeBasicAccelerator(std::vector<std::shared_ptr<Primitive>> prims, const ParamSet &ps) {
     int max_prims = ps.FindOneInt("maxprims", 32);
-    float prm_thresh = ps.FindOneFloat("prmthresh", 0.9);
-    float vol_thresh = ps.FindOneFloat("volthresh", 0.9);
-    return std::make_shared<OctreeBasicAccel>(std::move(prims), max_prims, prm_thresh, vol_thresh);
+    float mult_thresh = ps.FindOneFloat("multthresh", 4);
+    MAX_PRIMS = max_prims;
+    MULT_THRESH = mult_thresh;
+    return std::make_shared<OctreeBasicAccel>(std::move(prims));
 }
 
 OctreeBasicAccel::~OctreeBasicAccel() { //FreeAligned(nodes2);
