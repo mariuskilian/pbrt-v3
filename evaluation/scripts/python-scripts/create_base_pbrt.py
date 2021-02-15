@@ -13,8 +13,8 @@ def create_file(integrator, scene, accelerator, extra_args=[]):
         else:
             f.write("Integrator \"path\" \"integer maxdepth\" 20\n\n")
         f.write("Accelerator \"" + accelerator + "\"\n\n")
-        if extra_args != [""]:
-            for line in extra_args:
+        for line in extra_args:
+            if extra_args != "":
                 var_type = line.split(':')[0]
                 var_info = line.split(':')[1].split('=')
                 f.write("\"" + var_type + " " + var_info[0] + "\" " + var_info[1] + "\n")
