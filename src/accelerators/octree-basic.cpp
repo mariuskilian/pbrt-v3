@@ -142,7 +142,7 @@ bool BoundsContainPoint(Bounds3f &b, Point3f &p) {
     return true;
 }
 
-bool MakeLeafNode(Bounds3f &b, std::vector<std::shared_ptr<Primitive>> prims) {
+bool OctreeBasicAccel::MakeLeafNode(Bounds3f &b, uint32_t prim_count) {
     // Check how many children contain at least 80% of the parents prims,
     // we call these 'cluster children'
     Vector3f b_h = BoundsHalf(b);
@@ -150,24 +150,24 @@ bool MakeLeafNode(Bounds3f &b, std::vector<std::shared_ptr<Primitive>> prims) {
     for (int idx = 0; idx < 8; idx++) {
         Bounds3f b_child = DivideBounds(b, idx, b_h);
         int num_prims = 0;
-        for (int p = 0; p < prims.size(); p++)
-            if (BoundsContainPrim(b_child, prims[p])) num_prims++;
-        if (num_prims >= PRM_THRESH * prims.size()) cluster_children.push_back(idx);
+        for (int p = 0; p < prim_count; p++)
+            if (BoundsContainPrim(b_child, primitives[p])) num_prims++;
+        if (num_prims >= PRM_THRESH * prim_count) cluster_children.push_back(idx);
     }
     if (cluster_children.size() < 2) return false;
     // Since there's at least 2 children with >80% of the parents prims, make a list
     // of the prims that are in ALL of these 'cluster children'. This is the primitive cluster
     std::vector<std::shared_ptr<Primitive>> cluster_prims;
-    for (int p = 0; p < prims.size(); p++) {
+    for (int p = 0; p < prim_count; p++) {
         bool prim_in_all_cluster_children = true;
         for (int idx = 0; idx < cluster_children.size(); idx++) {
             Bounds3f b_child = DivideBounds(b, cluster_children[idx], b_h);
-            if (!BoundsContainPrim(b_child, prims[p])) {
+            if (!BoundsContainPrim(b_child, primitives[p])) {
                 prim_in_all_cluster_children = false;
                 break;
             }
         }
-        if (prim_in_all_cluster_children) cluster_prims.push_back(prims[p]);
+        if (prim_in_all_cluster_children) cluster_prims.push_back(primitives[p]);
     }
     // Now create bounds surrounding this cluster of primitives
     Bounds3f b_cluster;
@@ -226,7 +226,7 @@ OctreeBasicAccel::OctreeBasicAccel(std::vector<std::shared_ptr<Primitive>> p, in
     
     nodes.push_back(0);
     sizes.push_back(0);
-    Recurse(0, primitives, wb, 0);
+    Recurse(0, primitives.size(), wb, 0);
 
     octree_mem += sizeof(*this) - sizeof(primitives) +
             nodes.size() * sizeof(nodes[0]) +
@@ -240,18 +240,21 @@ OctreeBasicAccel::OctreeBasicAccel(std::vector<std::shared_ptr<Primitive>> p, in
 
 OctreeBasicAccel::OctreeBasicAccel(){}
 
-void OctreeBasicAccel::Recurse(int offset, std::vector<std::shared_ptr<Primitive>> primitives, Bounds3f bounds, int depth) {        
+void OctreeBasicAccel::Recurse(int offset, uint32_t parent_prim_count, Bounds3f bounds, int depth) {        
 
-    // TODO primitives partitionieren in brauche ich/brauche ich nicht: std::partition
-    std::vector<std::shared_ptr<Primitive>> prims;
-    for (int i = 0; i < primitives.size(); i++) {
-        std::shared_ptr<Primitive> p = primitives.at(i);
-        if (BoundsContainPrim(bounds, p)) prims.push_back(p);
-    }
+    uint32_t prim_count = 0;
+    std::partition(primitives.begin(), primitives.begin() + parent_prim_count,
+            [&bounds, &prim_count](std::shared_ptr<Primitive> p){
+                if (BoundsContainPrim(bounds, p)) {
+                    prim_count++;
+                    return true;
+                }
+                return false;
+            });
 
     octree_stat_num_nodes++;
 
-    if (prims.size() > MAX_PRIMS && !MakeLeafNode(bounds, prims)) { // Inner node
+    if (prim_count > MAX_PRIMS && !MakeLeafNode(bounds, prim_count)) { // Inner node
         uint32_t offset_children = nodes.size();
 
         std::vector<uint32_t> nodes_children = {0, 0, 0, 0, 0, 0, 0, 0};
@@ -261,15 +264,15 @@ void OctreeBasicAccel::Recurse(int offset, std::vector<std::shared_ptr<Primitive
 
         nodes[offset] = offset_children << 1 | 0;
         Vector3f b_h = BoundsHalf(bounds);
-        for (uint32_t i = 0; i < 8; i++) Recurse(offset_children + i, prims, DivideBounds(bounds, i, b_h), depth + 1);
+        for (uint32_t i = 0; i < 8; i++) Recurse(offset_children + i, prim_count, DivideBounds(bounds, i, b_h), depth + 1);
     } else { // Leaf node
         octree_stat_num_leafNodes++;
-        octree_stat_num_prims += prims.size();
+        octree_stat_num_prims += prim_count;
         uint32_t offset_leaves = leaves.size();
 
-        leaves.insert(leaves.end(), prims.begin(), prims.end());
+        leaves.insert(leaves.end(), primitives.begin(), primitives.begin() + prim_count);
         nodes[offset] = offset_leaves << 1 | 1;
-        sizes[offset] = prims.size();
+        sizes[offset] = prim_count;
     }
 }
 
