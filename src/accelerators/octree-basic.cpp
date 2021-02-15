@@ -146,34 +146,41 @@ bool OctreeBasicAccel::MakeLeafNode(Bounds3f &b, uint32_t prim_count) {
     // Check how many children contain at least 80% of the parents prims,
     // we call these 'cluster children'
     Vector3f b_h = BoundsHalf(b);
-    std::vector<int> cluster_children;
-    for (int idx = 0; idx < 8; idx++) {
-        Bounds3f b_child = DivideBounds(b, idx, b_h);
+    std::array<bool, 8> cluster_children;
+    for (int i = 0; i < 8; i++) {
+        cluster_children[i] = false;
+        Bounds3f b_child = DivideBounds(b, i, b_h);
         int num_prims = 0;
         for (int p = 0; p < prim_count; p++)
-            if (BoundsContainPrim(b_child, primitives[p])) num_prims++;
-        if (num_prims >= PRM_THRESH * prim_count) cluster_children.push_back(idx);
+                if (BoundsContainPrim(b_child, primitives[p])) num_prims++;
+        if (num_prims >= PRM_THRESH * prim_count) cluster_children[i] = true;
     }
-    if (cluster_children.size() < 2) return false;
+    if (std::count(cluster_children.begin(), cluster_children.end(), true) < 2) return false;
     // Since there's at least 2 children with >80% of the parents prims, make a list
     // of the prims that are in ALL of these 'cluster children'. This is the primitive cluster
-    std::vector<std::shared_ptr<Primitive>> cluster_prims;
-    for (int p = 0; p < prim_count; p++) {
-        bool prim_in_all_cluster_children = true;
-        for (int idx = 0; idx < cluster_children.size(); idx++) {
-            Bounds3f b_child = DivideBounds(b, cluster_children[idx], b_h);
-            if (!BoundsContainPrim(b_child, primitives[p])) {
-                prim_in_all_cluster_children = false;
-                break;
+    uint32_t num_cluster_prims = 0;
+    std::partition(primitives.begin(), primitives.begin() + prim_count,
+        [&b, &b_h, &num_cluster_prims, &cluster_children](std::shared_ptr<Primitive> p){
+            bool prim_in_all_cluster_children = true;
+            for (int i = 0; i < 8; i++) {
+                if (!cluster_children[i]) continue;
+                Bounds3f b_child = DivideBounds(b, i, b_h);
+                if (!BoundsContainPrim(b_child, p)) {
+                    prim_in_all_cluster_children = false;
+                    break;
+                }
             }
-        }
-        if (prim_in_all_cluster_children) cluster_prims.push_back(primitives[p]);
-    }
+            if (prim_in_all_cluster_children) {
+                num_cluster_prims++;
+                return true;
+            }
+            return false;
+        });
     // Now create bounds surrounding this cluster of primitives
     Bounds3f b_cluster;
     for (int i = 0; i < 3; i++) { b_cluster.pMin[i] = FLT_MAX; b_cluster.pMax[i] = -FLT_MAX; }
-    for (int i = 0; i < cluster_prims.size(); i++) {
-        Bounds3f b = cluster_prims[i]->WorldBound();
+    for (int i = 0; i < num_cluster_prims; i++) {
+        Bounds3f b = primitives[i]->WorldBound();
         for (int i = 0; i < 3; i++) {
             if (b.pMin[i] < b_cluster.pMin[i]) b_cluster.pMin[i] = b.pMin[i];
             if (b.pMax[i] > b_cluster.pMax[i]) b_cluster.pMax[i] = b.pMax[i];
