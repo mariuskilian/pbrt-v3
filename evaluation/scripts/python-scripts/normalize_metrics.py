@@ -5,6 +5,7 @@ import numpy as np
 from PIL import Image
 from matplotlib import cm
 import matplotlib.pyplot as plt
+import matplotlib.gridspec as gridspec
 import matplotlib.image as mpimg
 
 # imag = pyexr.open("crown.exr").get()
@@ -50,7 +51,7 @@ def normalize_all():
         Image.fromarray(images[i]).save(filepaths[i])
 
 def make_plot(prefix):
-    fig=plt.figure(figsize=(16, 4))
+    fig, axes = plt.subplots(nrows=1, ncols=len(images), figsize=(3*(len(images) + 1), 5))
     # Set Figure title
     t = prefix.split('=')[-1].split('-')[0]
     title = "Number of "
@@ -59,25 +60,28 @@ def make_plot(prefix):
     elif t == "leafnodes": title += "Leaf Nodes"
     title += " Intersected per Pixel"
     fig.suptitle(title, fontsize=16)
-    # Add all images as subplots
-    num_images = len(images)
-    for i in range(1, num_images + 1):
-        fig.add_subplot(1, num_images + 1, i)
-        plt.imshow(images[i-1])
-        plt.axis('off')
-        t = filepaths[i-1].split("/")[-1].split(prefix + '-')[-1].split(".png")[0]
+    # add images to subplot
+    for i in range(len(axes.flat)):
+        ax = axes.flat[i]
+        ax.set_axis_off()
+        im = ax.imshow(images[i], cmap='viridis',
+                    vmin=0, vmax=maxvalue)
+        t = filepaths[i].split("/")[-1].split(prefix + '-')[-1].split(".png")[0]
         if t == "bvh": title = "Original BVH"
         elif t == "octree": title = "Original Octree"
         elif t == "bvh-bfs": title = "Compressed BVH"
         elif t == "octree-bfs": title = "Compressed Octree"
         elif t == "embree": title = "Embree BVH"
-        plt.title(title)
-    # Add placeholder image to show colorbar
-    fig.add_subplot(1, num_images, num_images)
-    plt.imshow(np.ones((1, 1, 3)), vmin = 0, vmax = maxvalue)
-    plt.axis('off')
-    plt.colorbar()
-    plt.savefig(filepaths[0].split("/nrm_")[0] + "/plot_" + prefix + ".png")
+        ax.title.set_text(title)
+    # Adjust subplot dimensions etc.
+    fig.subplots_adjust(bottom=0.1, top=0.9, left=0.1, right=0.8,
+                        wspace=0.02, hspace=0.02)
+    # add an axes, lower left corner in [0.83, 0.1] measured in figure coordinate with axes width 0.02 and height 0.8
+    cb_ax = fig.add_axes([ax.get_position().x1+0.01,ax.get_position().y0,0.02,ax.get_position().height])
+    fig.colorbar(im, cax=cb_ax)
+    # cbar.set_ticks(np.arange(0,int(maxvalue),int(maxvalue/4)))
+    # save plot
+    plt.savefig(filepaths[0].split("/nrm_")[0] + "/plot_" + prefix + ".png", bbox_inches='tight')
         
 
 def exec():

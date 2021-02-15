@@ -13,6 +13,7 @@ namespace pbrt {
 enum class metric { PRIMITIVES, NODES, LEAFNODES, TIME };
 
 #define COUNT_STATS //debug
+//#define REL_KEYS
 
 #if defined (COUNT_STATS)
   static const bool count_stats = true;

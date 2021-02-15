@@ -1,9 +1,8 @@
 set -e
 
 SCENE=$1
-METRIC=$2
 
-INTGR="metric=$METRIC"
+INTGR="metric=primitives"
 RUN="./../../scripts/start_eval.sh $INTGR $SCENE"
 SOURCE=../../..
 BUILD=$SOURCE/build/Evaluation

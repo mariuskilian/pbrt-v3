@@ -131,8 +131,6 @@ bool EmbreeAccel::Intersect(const Ray &ray, SurfaceInteraction *isect) const {
 }
 
 float EmbreeAccel::IntersectMetric(const Ray &ray, metric m) const {
-    ProfilePhase p(Prof::AccelIntersect);
-
     SurfaceInteraction _isect;
     SurfaceInteraction* isect = &_isect;
 
@@ -156,7 +154,7 @@ float EmbreeAccel::IntersectMetric(const Ray &ray, metric m) const {
                      .hit = {.geomID = RTC_INVALID_GEOMETRY_ID,
                              .instID = {RTC_INVALID_GEOMETRY_ID}}};
     rtcIntersect1(scene, (RTCIntersectContext *)&context, &rayhit);
-    return context.metric_cnt;
+    return (m == metric::PRIMITIVES) ? context.metric_cnt : 0;
 }
 
 struct OccludedContext {

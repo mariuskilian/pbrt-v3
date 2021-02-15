@@ -105,8 +105,8 @@ class BVHChunkBFSAccel : public Aggregate {
 
     uint32_t Rank(const bftype bitfield[chunk_depth], int n) const;
 
-    Bounds3k FindBoundsKey(Bounds3f b_root, Bounds3f b, Vector3f factor) const;
-    Bounds3f FindCompressedBounds(Bounds3f b_root, Bounds3k b_k, Vector3f factor) const;
+    Bounds3k FindBoundsKey(Bounds3f b_root, Bounds3f b, Vector3f b2k, Vector3f k2b) const;
+    Bounds3f FindCompressedBounds(Bounds3f b_root, Bounds3k b_k, Vector3f k2b) const;
     ChildrenBuildInfo GetChildrenBuildInfo(Bounds3f b_root, uint32_t node_offset) const;
 
     void Recurse(uint32_t chunk_offset, uint32_t root_node_idx, Bounds3f b_root, int chunk_layer);
