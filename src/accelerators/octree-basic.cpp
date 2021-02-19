@@ -203,6 +203,11 @@ OctreeBasicAccel::OctreeBasicAccel(std::vector<std::shared_ptr<Primitive>> p)
         : primitives(std::move(p)) {
     printf("Chosen Accelerator: Octree\n");
 
+    std::vector<int> p_idxs;
+    for (int i = 0; i < primitives.size(); i++) {
+        p_idxs.push_back(i);
+    }
+
     for (int i = 0; i < 3; i++) { wb.pMin[i] = FLT_MAX; wb.pMax[i] = -FLT_MAX; }
 
     // Determine world bounds
@@ -236,9 +241,9 @@ OctreeBasicAccel::OctreeBasicAccel(std::vector<std::shared_ptr<Primitive>> p)
         octree_stat_num_nodes++;
 
         uint32_t prim_count = 0;
-        std::partition(primitives.begin(), primitives.begin() + current_node.parent_prim_count,
-                [&current_node, &prim_count](std::shared_ptr<Primitive> p){
-                    if (BoundsContainPrim(current_node.bounds, p)) { prim_count++; return true; }
+        std::partition(p_idxs.begin(), p_idxs.begin() + current_node.parent_prim_count,
+                [this, &current_node, &prim_count](int i){
+                    if (BoundsContainPrim(current_node.bounds, primitives[i])) { prim_count++; return true; }
                     return false; });
 
         // Determine whether or not this node should be an inner node or a leaf node
@@ -269,7 +274,7 @@ OctreeBasicAccel::OctreeBasicAccel(std::vector<std::shared_ptr<Primitive>> p)
             octree_stat_num_prims += prim_count;
             uint32_t offset_leaves = leaves.size();
 
-            leaves.insert(leaves.end(), primitives.begin(), primitives.begin() + prim_count);
+            leaves.insert(leaves.end(), p_idxs.begin(), p_idxs.begin() + prim_count);
             nodes[current_node.offset] = offset_leaves << 1 | 1;
             sizes[current_node.offset] = prim_count;
 
@@ -340,9 +345,17 @@ OctreeBasicAccel::~OctreeBasicAccel() { //FreeAligned(nodes2);
 }
 
 // === OCTREE RAY TRAVERSAL ===
+static thread_local int mailbox_gen = 0;
+static thread_local std::vector<int> mailbox;
 
+// === OCTREE RAY TRAVERSAL ===
 // TODO Rekursion in Schleife umwandeln (schneller)
 bool OctreeBasicAccel::Intersect(const Ray &ray, SurfaceInteraction *isect) const {
+    mailbox_gen++;
+    if (mailbox.size() == 0) {
+        mailbox = std::vector<int>(primitives.size(), 0);
+    }
+
     ProfilePhase p(Prof::AccelIntersect);
     Float tMin, _;
     if (!wb.IntersectP(ray, &tMin, &_)) return false;
@@ -398,9 +411,14 @@ bool OctreeBasicAccel::Intersect(const Ray &ray, SurfaceInteraction *isect) cons
             // Leaf Knoten
             uint32_t prim_start = nodes[current_node.offset] >> 1;
             uint32_t prim_end = prim_start + sizes[current_node.offset];
-            for (uint32_t i = prim_start; i < prim_end; i++)
+            for (uint32_t i = prim_start; i < prim_end; i++) {
                 // TODO LRU-Cache/Mailboxing, damit man nicht mehrmals dasselbe primitiv testen muss
-                if (leaves[i].get()->Intersect(ray, isect)) hit = true;
+                int prim_idx = leaves[i];
+                if (mailbox[prim_idx] != mailbox_gen) {
+                    mailbox[prim_idx] = mailbox_gen;
+                    if (primitives[prim_idx].get()->Intersect(ray, isect)) hit = true;
+                }
+            }
             // === COUNT STATS FOR LEAF NODES BEGIN ===
             #if defined (COUNT_STATS)
             num_prims_intersected += prim_end - prim_start;
@@ -480,9 +498,14 @@ float OctreeBasicAccel::IntersectMetric(const Ray &ray, metric m) const {
             // Leaf Knoten
             uint32_t prim_start = nodes[current_node.offset] >> 1;
             uint32_t prim_end = prim_start + sizes[current_node.offset];
-            for (uint32_t i = prim_start; i < prim_end; i++)
+            for (uint32_t i = prim_start; i < prim_end; i++) {
                 // TODO LRU-Cache/Mailboxing, damit man nicht mehrmals dasselbe primitiv testen muss
-                if (leaves[i].get()->Intersect(ray, isect)) hit = true;
+                int prim_idx = leaves[i];
+                if (mailbox[prim_idx] != mailbox_gen) {
+                    mailbox[prim_idx] = mailbox_gen;
+                    if (primitives[prim_idx].get()->Intersect(ray, isect)) hit = true;
+                }
+            }
             if (m == metric::PRIMITIVES) metric_cnt += prim_end - prim_start;
             if (hit && BoundsContainPoint(current_bounds, isect->p)) break;
             if (node_stack_offset == 0) break;
@@ -494,6 +517,11 @@ float OctreeBasicAccel::IntersectMetric(const Ray &ray, metric m) const {
 }
 
 bool OctreeBasicAccel::IntersectP(const Ray &ray) const {
+    mailbox_gen++;
+    if (mailbox.size() == 0) {
+        mailbox = std::vector<int>(primitives.size(), 0);
+    }
+
     ProfilePhase p(Prof::AccelIntersectP);
     Float tMin, _;
     if (!wb.IntersectP(ray, &tMin, &_)) return false;
@@ -537,9 +565,13 @@ bool OctreeBasicAccel::IntersectP(const Ray &ray) const {
             // Leaf Knoten
             uint32_t prim_start = nodes[current_node.offset] >> 1;
             uint32_t prim_end = prim_start + sizes[current_node.offset];
-            for (uint32_t i = prim_start; i < prim_end; i++)
-                // TODO LRU-Cache/Mailboxing, damit man nicht mehrmals dasselbe primitiv testen muss
-                if (leaves[i].get()->IntersectP(ray)) return true;
+            for (uint32_t i = prim_start; i < prim_end; i++) {
+                int prim_idx = leaves[i];
+                if (mailbox[prim_idx] != mailbox_gen) {
+                    mailbox[prim_idx] = mailbox_gen;
+                    if (primitives[prim_idx].get()->IntersectP(ray)) return true;
+                }
+            }
             if (node_stack_offset == 0) break;
             current_node = node_stack[--node_stack_offset];
             bounds_stack_offset = current_node.bounds_stack_offset;
@@ -550,42 +582,42 @@ bool OctreeBasicAccel::IntersectP(const Ray &ray) const {
 
 // === VISUALIZATION ===
 
-// Code to visualize octree
-void OctreeBasicAccel::lh_dump(const char *path) {
-    FILE *f = fopen(path, "wb");
-    uint32_t vcnt = 1;
-    lh_dump_rec(f, &vcnt, 0, WorldBound());
-    fclose(f);
-}
+// // Code to visualize octree
+// void OctreeBasicAccel::lh_dump(const char *path) {
+//     FILE *f = fopen(path, "wb");
+//     uint32_t vcnt = 1;
+//     lh_dump_rec(f, &vcnt, 0, WorldBound());
+//     fclose(f);
+// }
 
-void OctreeBasicAccel::lh_dump_rec(FILE *f, uint32_t *vcnt_, int offset, Bounds3f bounds) {
+// void OctreeBasicAccel::lh_dump_rec(FILE *f, uint32_t *vcnt_, int offset, Bounds3f bounds) {
 
-    // Vertices ausgeben
-    for(uint32_t i = 0; i < 8; i++)
-    {
-        Float x = ((i & 1) == 0) ? bounds.pMin.x : bounds.pMax.x;
-        Float y = ((i & 2) == 0) ? bounds.pMin.y : bounds.pMax.y;
-        Float z = ((i & 4) == 0) ? bounds.pMin.z : bounds.pMax.z;
-        fprintf(f, "v %f %f %f\n", x, y, z);
-    }
+//     // Vertices ausgeben
+//     for(uint32_t i = 0; i < 8; i++)
+//     {
+//         Float x = ((i & 1) == 0) ? bounds.pMin.x : bounds.pMax.x;
+//         Float y = ((i & 2) == 0) ? bounds.pMin.y : bounds.pMax.y;
+//         Float z = ((i & 4) == 0) ? bounds.pMin.z : bounds.pMax.z;
+//         fprintf(f, "v %f %f %f\n", x, y, z);
+//     }
 
-    // Vertex indices ausgeben
-    uint32_t vcnt = *vcnt_;
-    fprintf(f, "f %d %d %d %d\n", vcnt    , vcnt + 1, vcnt + 5, vcnt + 4);//bottom
-    fprintf(f, "f %d %d %d %d\n", vcnt + 2, vcnt + 3, vcnt + 7, vcnt + 6);//top
-    fprintf(f, "f %d %d %d %d\n", vcnt    , vcnt + 1, vcnt + 3, vcnt + 2);//front
-    fprintf(f, "f %d %d %d %d\n", vcnt + 4, vcnt + 5, vcnt + 7, vcnt + 6);//back
-    fprintf(f, "f %d %d %d %d\n", vcnt    , vcnt + 4, vcnt + 6, vcnt + 2);//left
-    fprintf(f, "f %d %d %d %d\n", vcnt + 1, vcnt + 5, vcnt + 7, vcnt + 3);//right
-    *vcnt_ += 8;
+//     // Vertex indices ausgeben
+//     uint32_t vcnt = *vcnt_;
+//     fprintf(f, "f %d %d %d %d\n", vcnt    , vcnt + 1, vcnt + 5, vcnt + 4);//bottom
+//     fprintf(f, "f %d %d %d %d\n", vcnt + 2, vcnt + 3, vcnt + 7, vcnt + 6);//top
+//     fprintf(f, "f %d %d %d %d\n", vcnt    , vcnt + 1, vcnt + 3, vcnt + 2);//front
+//     fprintf(f, "f %d %d %d %d\n", vcnt + 4, vcnt + 5, vcnt + 7, vcnt + 6);//back
+//     fprintf(f, "f %d %d %d %d\n", vcnt    , vcnt + 4, vcnt + 6, vcnt + 2);//left
+//     fprintf(f, "f %d %d %d %d\n", vcnt + 1, vcnt + 5, vcnt + 7, vcnt + 3);//right
+//     *vcnt_ += 8;
 
-    // Rekursion
-    if ((nodes[offset] & 1) == 0) { // Inner node
-        Vector3f b_h = BoundsHalf(bounds);
-        for (uint32_t i = 0; i < 8; i++) {
-            lh_dump_rec(f, vcnt_, (nodes[offset] >> 1) + i, DivideBounds(bounds, i, b_h));
-        }
-    }
-}
+//     // Rekursion
+//     if ((nodes[offset] & 1) == 0) { // Inner node
+//         Vector3f b_h = BoundsHalf(bounds);
+//         for (uint32_t i = 0; i < 8; i++) {
+//             lh_dump_rec(f, vcnt_, (nodes[offset] >> 1) + i, DivideBounds(bounds, i, b_h));
+//         }
+//     }
+// }
 
 }  // namespace pbrt

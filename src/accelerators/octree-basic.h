@@ -96,7 +96,7 @@ class OctreeBasicAccel : public Aggregate {
     Bounds3f WorldBound() const { return wb; }
     std::vector<uint32_t> &Nodes() { return nodes; }
     std::vector<uint32_t> &Sizes() { return sizes; }
-    std::vector<std::shared_ptr<Primitive>> &Leaves() { return leaves; }
+    std::vector<std::shared_ptr<Primitive>> &Leaves() { return primitives; }
     ~OctreeBasicAccel();
     bool Intersect(const Ray &ray, SurfaceInteraction *isect) const;
     float IntersectMetric(const Ray &ray, metric m) const;
@@ -116,7 +116,8 @@ class OctreeBasicAccel : public Aggregate {
     void lh_dump_rec(FILE *f, uint32_t *vcnt_, int offset, Bounds3f bounds);
 
     std::vector<uint32_t> nodes, sizes; 
-    std::vector<std::shared_ptr<Primitive>> leaves;
+    std::vector<uint32_t> leaves;
+    //std::vector<std::shared_ptr<Primitive>> leaves;
 };
 
 std::shared_ptr<OctreeBasicAccel> CreateOctreeBasicAccelerator(

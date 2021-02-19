@@ -206,10 +206,56 @@ std::shared_ptr<OcChunkBFSAccel> CreateOcChunkBFSAccelerator(std::vector<std::sh
 OcChunkBFSAccel::~OcChunkBFSAccel() { //FreeAligned(nodes2);
 }
 
+// class MailBox<size_t size> {
+// private:
+//     Primitive* prims[size];
+//     int gens[size];
+// public:
+//     Mailbox() {
+//         for (uint i = 0; i < size; i++) {
+//             prims[size] = NULL;
+//             gens[i] = 0;
+//         }
+//     }
+
+//     bool test(Primitive *prim) {
+//         int maxgen = -1;
+//         int j;
+
+//         for (uint i = 0; i < size; i++) {
+//             gens[i]++;
+
+//             if (maxgen < gens[i]) {
+//                 maxgen = gens[i];
+//                 j = i;
+//             }
+
+//             if (prim == prims[i]) {
+//                 maxgen = INT_MAX; 
+//                 j = i;
+//             }
+//         }
+
+//         prims[j] = prim;
+//         gens[j] = 0;
+        
+//         return false;            
+//     }
+// }
+
+static thread_local int gen = 0;
+static thread_local std::vector<int> mailbox;
+
 // === OCTREE RAY TRAVERSAL ===
 
 // TODO Rekursion in Schleife umwandeln (schneller)
 bool OcChunkBFSAccel::Intersect(const Ray &ray, SurfaceInteraction *isect) const {
+    gen++;
+    if (mailbox.size() == 0) {
+        mailbox = std::vector<int>(primitives.size(), 0);
+    }
+
+
     ProfilePhase p(Prof::AccelIntersect);
     Float tMin, _;
     if (!wb.IntersectP(ray, &tMin, &_)) return false;
