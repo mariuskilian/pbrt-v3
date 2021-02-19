@@ -84,7 +84,7 @@ ChildTraversal FindTraversalOrder(const Ray &ray, Bounds3f &b, Float tMin, Vecto
 int Rank(bftype bits, int n = bfsize);
 bool BoundsContainPrim(Bounds3f &b, std::shared_ptr<Primitive> p);
 bool BoundsContainPoint(Bounds3f &b, Point3f &p);
-bool MakeLeafNode(Bounds3f &b, std::vector<std::shared_ptr<Primitive>>);
+// bool MakeLeafNode(Bounds3f &b, std::vector<std::shared_ptr<Primitive>>);
 
 // OcteeAccel Declarations
 
@@ -108,10 +108,10 @@ class OctreeBasicAccel : public Aggregate {
     std::vector<std::shared_ptr<Primitive>> primitives;
     Bounds3f wb; // World Bounds
     
-    bool MakeLeafNode(Bounds3f &b, uint32_t prim_count);
+    //bool MakeLeafNode(Bounds3f &b, uint32_t prim_count);
     
-    void Recurse(int offset, uint32_t parent_prim_count, Bounds3f bounds, int depth);
-    void RecurseIntersect(const Ray &ray, SurfaceInteraction *isect, uint32_t offset, Bounds3f bounds, Float tMin, bool &hit) const;
+    // void Recurse(int offset, uint32_t parent_prim_count, Bounds3f bounds, int depth);
+    // void RecurseIntersect(const Ray &ray, SurfaceInteraction *isect, uint32_t offset, Bounds3f bounds, Float tMin, bool &hit) const;
     void lh_dump(const char *path);
     void lh_dump_rec(FILE *f, uint32_t *vcnt_, int offset, Bounds3f bounds);
 
