@@ -47,6 +47,7 @@ STAT_MEMORY_COUNTER("Memory/Octree topology", octree_mem_top);
 STAT_COUNTER("Octree/Nodes - # Total", octree_stat_num_nodes);
 STAT_COUNTER("Octree/Nodes - # Leaf", octree_stat_num_leafNodes);
 STAT_COUNTER("Octree/Primitives - # Total", octree_stat_num_prims);
+STAT_RATIO("Octree/Duplicate Primitives", octree_num_totalPrims, octree_num_uniquePrims);
 
 // Stats counted when intersecting
 #if defined (COUNT_STATS)
@@ -142,59 +143,59 @@ bool BoundsContainPoint(Bounds3f &b, Point3f &p) {
     return true;
 }
 
-bool OctreeBasicAccel::MakeLeafNode(Bounds3f &b, uint32_t prim_count) {
-    // Check how many children contain at least 80% of the parents prims,
-    // we call these 'cluster children'
-    Vector3f b_h = BoundsHalf(b);
-    std::array<bool, 8> cluster_children;
-    for (int i = 0; i < 8; i++) {
-        cluster_children[i] = false;
-        Bounds3f b_child = DivideBounds(b, i, b_h);
-        int num_prims = 0;
-        for (int p = 0; p < prim_count; p++)
-                if (BoundsContainPrim(b_child, primitives[p])) num_prims++;
-        if (num_prims >= PRM_THRESH * prim_count) cluster_children[i] = true;
-    }
-    if (std::count(cluster_children.begin(), cluster_children.end(), true) < 2) return false;
-    // Since there's at least 2 children with >80% of the parents prims, make a list
-    // of the prims that are in ALL of these 'cluster children'. This is the primitive cluster
-    uint32_t num_cluster_prims = 0;
-    std::partition(primitives.begin(), primitives.begin() + prim_count,
-        [&b, &b_h, &num_cluster_prims, &cluster_children](std::shared_ptr<Primitive> p){
-            bool prim_in_all_cluster_children = true;
-            for (int i = 0; i < 8; i++) {
-                if (!cluster_children[i]) continue;
-                Bounds3f b_child = DivideBounds(b, i, b_h);
-                if (!BoundsContainPrim(b_child, p)) {
-                    prim_in_all_cluster_children = false;
-                    break;
-                }
-            }
-            if (prim_in_all_cluster_children) {
-                num_cluster_prims++;
-                return true;
-            }
-            return false;
-        });
-    // Now create bounds surrounding this cluster of primitives
-    Bounds3f b_cluster;
-    for (int i = 0; i < 3; i++) { b_cluster.pMin[i] = b.pMax[i]; b_cluster.pMax[i] = b.pMin[i]; }
-    for (int i = 0; i < num_cluster_prims; i++) {
-        Bounds3f b_prim = primitives[i]->WorldBound();
-        for (int i = 0; i < 3; i++) {
-            if (b_prim.pMin[i] < b_cluster.pMin[i]) b_cluster.pMin[i] = b_prim.pMin[i];
-            if (b_prim.pMax[i] > b_cluster.pMax[i]) b_cluster.pMax[i] = b_prim.pMax[i];
-        }
-    }
-    // Limit the cluster bounds to the current node's bounds
-    for (int i = 0; i < 3; i++) {
-        b_cluster.pMin[i] = (b_cluster.pMin[i] < b.pMin[i]) ? b.pMin[i] : b_cluster.pMin[i];
-        b_cluster.pMax[i] = (b_cluster.pMax[i] > b.pMax[i]) ? b.pMax[i] : b_cluster.pMax[i];
-    }
-    // Now check the bounds of this cluster of prims, and if it takes up at least 80% of
-    // the current bounds space, mark it as a leaf node
-    return (b_cluster.Volume() >= VOL_THRESH * b.Volume());
-}
+// bool OctreeBasicAccel::MakeLeafNode(Bounds3f &b, uint32_t prim_count) {
+//     // Check how many children contain at least 80% of the parents prims,
+//     // we call these 'cluster children'
+//     Vector3f b_h = BoundsHalf(b);
+//     std::array<bool, 8> cluster_children;
+//     for (int i = 0; i < 8; i++) {
+//         cluster_children[i] = false;
+//         Bounds3f b_child = DivideBounds(b, i, b_h);
+//         int num_prims = 0;
+//         for (int p = 0; p < prim_count; p++)
+//                 if (BoundsContainPrim(b_child, primitives[p])) num_prims++;
+//         if (num_prims >= PRM_THRESH * prim_count) cluster_children[i] = true;
+//     }
+//     if (std::count(cluster_children.begin(), cluster_children.end(), true) < 2) return false;
+//     // Since there's at least 2 children with >80% of the parents prims, make a list
+//     // of the prims that are in ALL of these 'cluster children'. This is the primitive cluster
+//     uint32_t num_cluster_prims = 0;
+//     std::partition(primitives.begin(), primitives.begin() + prim_count,
+//         [&b, &b_h, &num_cluster_prims, &cluster_children](std::shared_ptr<Primitive> p){
+//             bool prim_in_all_cluster_children = true;
+//             for (int i = 0; i < 8; i++) {
+//                 if (!cluster_children[i]) continue;
+//                 Bounds3f b_child = DivideBounds(b, i, b_h);
+//                 if (!BoundsContainPrim(b_child, p)) {
+//                     prim_in_all_cluster_children = false;
+//                     break;
+//                 }
+//             }
+//             if (prim_in_all_cluster_children) {
+//                 num_cluster_prims++;
+//                 return true;
+//             }
+//             return false;
+//         });
+//     // Now create bounds surrounding this cluster of primitives
+//     Bounds3f b_cluster;
+//     for (int i = 0; i < 3; i++) { b_cluster.pMin[i] = b.pMax[i]; b_cluster.pMax[i] = b.pMin[i]; }
+//     for (int i = 0; i < num_cluster_prims; i++) {
+//         Bounds3f b_prim = primitives[i]->WorldBound();
+//         for (int i = 0; i < 3; i++) {
+//             if (b_prim.pMin[i] < b_cluster.pMin[i]) b_cluster.pMin[i] = b_prim.pMin[i];
+//             if (b_prim.pMax[i] > b_cluster.pMax[i]) b_cluster.pMax[i] = b_prim.pMax[i];
+//         }
+//     }
+//     // Limit the cluster bounds to the current node's bounds
+//     for (int i = 0; i < 3; i++) {
+//         b_cluster.pMin[i] = (b_cluster.pMin[i] < b.pMin[i]) ? b.pMin[i] : b_cluster.pMin[i];
+//         b_cluster.pMax[i] = (b_cluster.pMax[i] > b.pMax[i]) ? b.pMax[i] : b_cluster.pMax[i];
+//     }
+//     // Now check the bounds of this cluster of prims, and if it takes up at least 80% of
+//     // the current bounds space, mark it as a leaf node
+//     return (b_cluster.Volume() >= VOL_THRESH * b.Volume());
+// }
 
 // === OCTREE STRUCTURE CREATION ===
 
@@ -283,6 +284,8 @@ OctreeBasicAccel::OctreeBasicAccel(std::vector<std::shared_ptr<Primitive>> p)
             leaves.size() * sizeof(leaves[0]);
     octree_mem_top += sizeof(nodes) + nodes.size() * sizeof(nodes[0]);
 
+    octree_num_totalPrims = octree_stat_num_prims;
+    octree_num_uniquePrims = primitives.size();
 
     // lh_dump("visualize_basic.obj");
 }

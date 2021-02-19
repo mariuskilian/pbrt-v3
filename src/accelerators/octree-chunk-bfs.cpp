@@ -57,6 +57,7 @@ STAT_FLOAT_DISTRIBUTION("Octree-BFS/Chunks - Fill %", octreebfs_dist_chunkFill);
 STAT_COUNTER("Octree-BFS/Nodes - # Total (incl. implicit root node)", octreebfs_stat_num_nodes); // DONE
 STAT_COUNTER("Octree-BFS/Nodes - # Leaf", octreebfs_stat_num_leafNode); // DONE
 STAT_COUNTER("Octree-BFS/Primitives - # Total", octreebfs_stat_num_prims);
+STAT_RATIO("Octree-BFS/Duplicate Primitives", octreebfs_num_totalPrims, octreebfs_num_uniquePrims);
 
 // Stats counted when intersecting
 #if defined (COUNT_STATS)
@@ -128,7 +129,8 @@ OcChunkBFSAccel::OcChunkBFSAccel(std::vector<std::shared_ptr<Primitive>> p, cons
             sizes.size() * sizeof(sizes[0]) +
             octree.size() * sizeof(octree[0]);
 
-
+    octreebfs_num_totalPrims = octreebfs_stat_num_prims;
+    octreebfs_num_uniquePrims = primitives.size();
     //lh_dump("visualize_bfs.obj");
     //lh_dump_dfs("visualize_dfs.obj");
 }
