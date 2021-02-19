@@ -21,32 +21,19 @@ COUNT_STATS="-DCOUNT_STATS=False" # Because we want to compare time
 
 cmake -S $SOURCE -B $BUILD $COUNT_STATS
 make -C $BUILD -j
-$RUN "octree" integer:maxdepth=8 float:vol_thresh=0.3 float:prm_thresh=0.3
-$RUN "octree" integer:maxdepth=8 float:vol_thresh=0.3 float:prm_thresh=0.6
-$RUN "octree" integer:maxdepth=8 float:vol_thresh=0.3 float:prm_thresh=0.9
-$RUN "octree" integer:maxdepth=8 float:vol_thresh=0.6 float:prm_thresh=0.3
-$RUN "octree" integer:maxdepth=8 float:vol_thresh=0.6 float:prm_thresh=0.6
-$RUN "octree" integer:maxdepth=8 float:vol_thresh=0.6 float:prm_thresh=0.9
-$RUN "octree" integer:maxdepth=8 float:vol_thresh=0.9 float:prm_thresh=0.3
-$RUN "octree" integer:maxdepth=8 float:vol_thresh=0.9 float:prm_thresh=0.6
-$RUN "octree" integer:maxdepth=8 float:vol_thresh=0.9 float:prm_thresh=0.9
 
-$RUN "octree" integer:maxdepth=16 float:vol_thresh=0.3 float:prm_thresh=0.3
-$RUN "octree" integer:maxdepth=16 float:vol_thresh=0.3 float:prm_thresh=0.6
-$RUN "octree" integer:maxdepth=16 float:vol_thresh=0.3 float:prm_thresh=0.9
-$RUN "octree" integer:maxdepth=16 float:vol_thresh=0.6 float:prm_thresh=0.3
-$RUN "octree" integer:maxdepth=16 float:vol_thresh=0.6 float:prm_thresh=0.6
-$RUN "octree" integer:maxdepth=16 float:vol_thresh=0.6 float:prm_thresh=0.9
-$RUN "octree" integer:maxdepth=16 float:vol_thresh=0.9 float:prm_thresh=0.3
-$RUN "octree" integer:maxdepth=16 float:vol_thresh=0.9 float:prm_thresh=0.6
-$RUN "octree" integer:maxdepth=16 float:vol_thresh=0.9 float:prm_thresh=0.9
-
-$RUN "octree" integer:maxdepth=32 float:vol_thresh=0.3 float:prm_thresh=0.3
-$RUN "octree" integer:maxdepth=32 float:vol_thresh=0.3 float:prm_thresh=0.6
-$RUN "octree" integer:maxdepth=32 float:vol_thresh=0.3 float:prm_thresh=0.9
-$RUN "octree" integer:maxdepth=32 float:vol_thresh=0.6 float:prm_thresh=0.3
-$RUN "octree" integer:maxdepth=32 float:vol_thresh=0.6 float:prm_thresh=0.6
-$RUN "octree" integer:maxdepth=32 float:vol_thresh=0.6 float:prm_thresh=0.9
-$RUN "octree" integer:maxdepth=32 float:vol_thresh=0.9 float:prm_thresh=0.3
-$RUN "octree" integer:maxdepth=32 float:vol_thresh=0.9 float:prm_thresh=0.6
-$RUN "octree" integer:maxdepth=32 float:vol_thresh=0.9 float:prm_thresh=0.9
+$RUN "octree" float:multthresh=1
+$RUN "octree" float:multthresh=1.5
+$RUN "octree" float:multthresh=2
+$RUN "octree" float:multthresh=2.5
+$RUN "octree" float:multthresh=3
+$RUN "octree" float:multthresh=3.5
+$RUN "octree" float:multthresh=4
+$RUN "octree" float:multthresh=4.5
+$RUN "octree" float:multthresh=5
+$RUN "octree" float:multthresh=5.5
+$RUN "octree" float:multthresh=6
+$RUN "octree" float:multthresh=6.5
+$RUN "octree" float:multthresh=7
+$RUN "octree" float:multthresh=7.5
+$RUN "octree" float:multthresh=8
