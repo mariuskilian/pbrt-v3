@@ -7,11 +7,16 @@ def create_file(integrator, scene, accelerator, extra_args=[]):
     if os.path.exists(path + "/" + scene + ".pbrt"):
         f = open(path + "/eval_base.pbrt", "w")
         if integrator.startswith("metric"):
+            f.write("Sampler \"sobol\" \"integer pixelsamples\" 1\n\n")
             intgr = integrator.split('=')
             f.write("Integrator \"" + intgr[0] + "\"\n")
             f.write("\"string metric\" \"" + intgr[1] + "\"\n\n")
         else:
-            f.write("Integrator \"path\" \"integer maxdepth\" 20\n\n")
+            f.write("Sampler \"sobol\" \"integer pixelsamples\" 32\n\n")
+            if integrator == "path":
+                f.write("Integrator \"path\" \"integer maxdepth\" 20\n\n")
+            else:
+                f.write("Integrator \"" + integrator + "\"\n\n")
         f.write("Accelerator \"" + accelerator + "\"\n\n")
         for line in extra_args:
             if line != "":
