@@ -3,8 +3,10 @@ set -e
 SCENE=$1
 
 INTGR="path"
-RUN="./../../scripts/start_eval.sh $INTGR $SCENE octree integer:maxprims=1"
+ACCEL="octree"
+RUN="./../../scripts/start_eval.sh $INTGR $SCENE $ACCEL"
 SOURCE=../../..
+PYSCRIPTS=../../scripts/python-scripts
 BUILD=$SOURCE/build/Evaluation
 
 if [ ! -d $SCENE ]
@@ -23,11 +25,13 @@ cmake -S $SOURCE -B $BUILD $COUNT_STATS
 make -C $BUILD -j
 
 $RUN float:multthresh=1.5
-$RUN float:multthresh=2
+$RUN float:multthresh=2.0
 $RUN float:multthresh=2.5
-$RUN float:multthresh=3
+$RUN float:multthresh=3.0
 $RUN float:multthresh=3.5
-$RUN float:multthresh=4
+$RUN float:multthresh=4.0
 $RUN float:multthresh=4.5
-$RUN float:multthresh=5
+$RUN float:multthresh=5.0
 $RUN float:multthresh=5.5
+
+python3 $PYSCRIPTS/plot_data.py $SCENE $ACCEL prof
