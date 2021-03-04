@@ -40,7 +40,8 @@ def get_dist(path, category):
 
 
 def get_info(scene, accellist, filelist, tp, stat):
-    savepath = str(sys.argv[0]).rstrip("adlopty._") + "/../../plots/" + str(os.getcwd()).split('/')[-1] + '_' + scene + '_' + tp
+    savepath = sys.argv[0].rstrip("plot_data.py") + "/../../plots/"
+    savepath += str(os.getcwd()).split('/')[-1] + '_' + scene + '_' + tp
 
     # y label
     ylabel = ""
