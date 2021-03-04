@@ -34,4 +34,6 @@ $RUN float:multthresh=4.5
 $RUN float:multthresh=5.0
 $RUN float:multthresh=5.5
 
-python3 $PYSCRIPTS/plot_data.py $SCENE $ACCEL prof
+python3 $PYSCRIPTS/plot_data.py $SCENE prof
+# python3 $PYSCRIPTS/plot_data.py $SCENE mem:total
+# python3 $PYSCRIPTS/plot_data.py $SCENE mem:topology

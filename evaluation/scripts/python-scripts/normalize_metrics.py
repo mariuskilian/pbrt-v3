@@ -81,7 +81,8 @@ def make_plot(prefix):
     fig.colorbar(im, cax=cb_ax)
     # cbar.set_ticks(np.arange(0,int(maxvalue),int(maxvalue/4)))
     # save plot
-    plt.savefig(filepaths[0].split("/nrm_")[0] + "/plot_" + prefix + ".pdf", bbox_inches='tight', dpi=600)
+    savepath = str(sys.argv[1]) + "/../../plots/" + filepaths[0].split("/nrm_")[0] + "/plot_" + prefix + ".pdf"
+    plt.savefig(savepath, bbox_inches='tight', dpi=600)
         
 
 def exec():

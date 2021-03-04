@@ -38,22 +38,26 @@ def get_dist(path, category):
                 m = re.search(r"(\d+.\d\d\d) avg \[range (\d+.?\d*) - (\d+.?\d*)\]", line)
                 return float(m[1]), int(m[2]), int(m[3])
 
-def get_yLabel(tp, stat):
-    # Time
-    if tp == "prof" or tp == "time": return "Execution Time (s)"
-    # Stats
+
+def get_info(scene, accellist, filelist, tp, stat):
+    savepath = str(sys.argv[0]).rstrip("adlopty._") + "/../../plots/" + str(os.getcwd()).split('/')[-1] + '_' + scene + '_' + tp
+
+    # y label
     ylabel = ""
-    if tp == "dist": ylabel += "Average "
+    # Time
+    if tp == "prof" or tp == "time": ylabel = "Execution Time (s)"
+    # Stats
+    if tp == "dist": ylabel = "Average "
     if tp == "stat" or tp  == "dist":
+        savepath += '=' + stat
         ylabel += "Number of "
         if "leaf" in stat: ylabel += "Leaf "
         if "node" in stat: ylabel += "Node "
         else: ylabel += stat.capitalize() + " "
         ylabel += "Intersections"
     if tp == "dist": ylabel += " per Ray"
-    return ylabel
 
-def get_xLabel(accellist, filelist):
+    # x label / x items
     if all(accel == accellist[0] for accel in accellist):
         if "maxprims=" in filelist[0]:
             xlabel = "Primitive Threshold"
@@ -64,8 +68,12 @@ def get_xLabel(accellist, filelist):
         else:
             xlabel = sys.argv[3]
             xitems = [re.search(r"=?(\d.\d)", file)[1] for file in filelist]
-        return xlabel, xitems
-    else: return "Acceleration Structure", accellist
+    else:
+        xlabel = "Acceleration Structure"
+        xitems = accellist
+
+    savepath += '.pdf'
+    return xlabel, ylabel, xitems, savepath
 
 def exec():
     # Format input params
@@ -105,23 +113,16 @@ def exec():
             statlist.append(get_stat(fp, key))
         elif (tp == "dist"):
             statlist.append(get_dist(fp, key)[0])
-    plt.ylabel(get_yLabel(tp, stat))
-    xLabel, xItems = get_xLabel(accellist, filelist)
-    plt.xlabel(xLabel)
-    plt.bar(xItems, statlist)
-    plt.show()
+    xlabel, ylabel, xitems, savepath = get_info(scene, accellist, filelist, tp, stat)
+    plt.ylabel(ylabel)
+    plt.xlabel(xlabel)
+    plt.bar(xitems, statlist)
+    plt.savefig(savepath, bbox_inches='tight', dpi=600)
 
 exec()
 
 ## System arguments format (in that order):
 ##   scene: crown, killeroo, etc.
-##   type: prof, time, stat:<name>, dist:<name>
+##   type: prof, time, stat:<name>, dist:<name>, mem:<memtype>
 ##      name: primitive, chunk, leafnode, node
-
-# def plot_prof():
-#     key = "Accelerator::Intersect"
-#     bvh_time = get_prof("path-bvh.log", key)
-#     kdtree_time = get_prof("kdtree.log", key)
-#     plt.ylabel("Execution Time (s)")
-#     plt.bar(["BVH", "KdTree"], [bvh_time, kdtree_time])
-#     plt.show()
+##      memtype: total, topology
