@@ -166,7 +166,8 @@ def exec():
         del xitems[idx]
         del statlist[idx]
     # :(
-    plt.suptitle("\n".join(wrap(title, 60)), y=1.03)
+    plt.figure(figsize=(5, 5))
+    plt.suptitle("\n".join(wrap(title, 55)), y=1)
     plt.ylabel(ylabel)
     plt.xlabel(xlabel)
     plt.bar(xitems, statlist)
