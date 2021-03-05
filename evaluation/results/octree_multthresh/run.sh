@@ -1,6 +1,9 @@
 set -e
 
 SCENE=$1
+MIN=$2
+MAX=$3
+STEP=$4
 
 INTGR="path"
 ACCEL="octree"
@@ -21,18 +24,12 @@ fi
 
 COUNT_STATS="-DCOUNT_STATS=False" # Because we want to compare time
 
-cmake -S $SOURCE -B $BUILD $COUNT_STATS
-make -C $BUILD -j
+# cmake -S $SOURCE -B $BUILD $COUNT_STATS
+# make -C $BUILD -j
 
-$RUN float:multthresh=1.5
-$RUN float:multthresh=2.0
-$RUN float:multthresh=2.5
-$RUN float:multthresh=3.0
-$RUN float:multthresh=3.5
-$RUN float:multthresh=4.0
-$RUN float:multthresh=4.5
-$RUN float:multthresh=5.0
-$RUN float:multthresh=5.5
+for i in $(seq $MIN $STEP $MAX); do
+    $RUN float:multthresh=$i
+done
 
 python3 $PYSCRIPTS/plot_data.py $SCENE prof
 python3 $PYSCRIPTS/plot_data.py $SCENE mem:topology
