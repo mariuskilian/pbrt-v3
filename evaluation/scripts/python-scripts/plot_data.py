@@ -2,8 +2,9 @@ import matplotlib.pyplot as plt
 import re
 import sys
 import os
+from textwrap import wrap
 
-# order={"embree":0, "bvh":10, "bvh-bfs":20, "kdtree":30, "octree":40, "octree-bfs":50}
+order={"Embree BVH":0, "Basic BVH":10, "Quantized BVH":20, "k-d Tree":30, "Basic Octree":40, "1-Bit Octree":50}
 
 def get_prof(path, key):
     # extract value of flattened profile key in seconds from file path
@@ -18,6 +19,19 @@ def get_prof(path, key):
                 # find & convert (   0:00:00.00) substring to seconds
                 m = re.search(r"\(\s*(\d*):(\d*):(\d*).(\d*)\)", line)
                 return 60 * 60 * int(m[1]) + 60 * int(m[2]) + int(m[3]) + int(m[4]) / 100
+
+def get_mem(path, key):
+    with open(path) as f:
+        for line in f:
+            if "  Memory" in line: break
+        for line in f:
+            if key in line:
+                m = re.search(r"\s*(\d+.\d\d)\s*((?:Mi|k)B)", line)
+                if m == None: return None
+                if str(m[2]).startswith("Mi"):
+                    return 1000 * 1000 * float(m[1])
+                if str(m[2]).startswith('k'):
+                    return 1000 * float(m[1])
 
 def get_stat(path, category):
     with open(path) as f:
@@ -43,23 +57,11 @@ def get_info(scene, accellist, filelist, tp, stat):
     savepath = sys.argv[0].rstrip("plot_data.py") + "/../../plots/"
     savepath += str(os.getcwd()).split('/')[-1] + '_' + scene + '_' + tp
 
-    # y label
-    ylabel = ""
-    # Time
-    if tp == "prof" or tp == "time": ylabel = "Execution Time (s)"
-    # Stats
-    if tp == "dist": ylabel = "Average "
-    if tp == "stat" or tp  == "dist":
-        savepath += '=' + stat
-        ylabel += "Number of "
-        if "leaf" in stat: ylabel += "Leaf "
-        if "node" in stat: ylabel += "Node "
-        else: ylabel += stat.capitalize() + " "
-        ylabel += "Intersections"
-    if tp == "dist": ylabel += " per Ray"
+    title = ""
 
     # x label / x items
     if all(accel == accellist[0] for accel in accellist):
+        title += accellist[0] + ": "
         if "maxprims=" in filelist[0]:
             xlabel = "Primitive Threshold"
             xitems = [re.search(r"maxprims=(\d+)", file)[1] for file in filelist]
@@ -73,8 +75,35 @@ def get_info(scene, accellist, filelist, tp, stat):
         xlabel = "Acceleration Structure"
         xitems = accellist
 
+    # y label
+    ylabel = ""
+    # Time
+    if tp == "prof" or tp == "time": ylabel += "Execution Time (s)"
+    # Stats
+    if tp == "dist": ylabel += "Average "
+    if tp == "stat" or tp  == "dist":
+        savepath += '=' + stat
+        ylabel += "Number of "
+        if "leaf" in stat: ylabel += "Leaf "
+        if "node" in stat: ylabel += "Node "
+        else: ylabel += stat.capitalize() + " "
+        ylabel += "Intersections"
+    if tp == "dist": ylabel += " per Ray"
+    if tp == "mem":
+        ylabel += "Size of "
+        if stat == "":
+            ylabel += "Total Structure"
+        else:
+            savepath += '=' + stat
+            ylabel += stat.capitalize()
+        ylabel += " (Bytes)"
+
+
+    filler = " for each " if " per " in ylabel else " per "
+    title += ylabel + filler + xlabel
+
     savepath += '.pdf'
-    return xlabel, ylabel, xitems, savepath
+    return title, xlabel, ylabel, xitems, savepath
 
 def exec():
     # Format input params
@@ -84,7 +113,7 @@ def exec():
         _ = tp.split(':')
         tp = _[0]
         stat = _[1]
-    # Determine key (only needed for stat and dist types)
+    # Determine key (only needed for stat and dist and mem types)
     if tp == "stat" or tp == "dist":
         key = " - Intersects - "
         if "node" in stat:
@@ -92,38 +121,62 @@ def exec():
             if "leaf" in stat: key += "Leaf"
             else: key += "Total"
         else: key += stat.capitalize()
+    elif tp == "mem":
+        if stat == "topology": key = " topology"
+        else: key = " tree"
     # Sort filelist alphabetically
-    filelist = os.listdir(scene)
+    _filelist = os.listdir(scene)
+    filelist = []
     accellist = []
-    for file in filelist:
+    for file in _filelist:
         if file.endswith(".log"):
-            if "embree" in file: accellist.append("embree")
-            elif "bvh" in file: accellist.append("bvh")
-            elif "octree" in file: accellist.append("octree")
-            if "-bfs" in file: accellist[-1] += "-bfs"
-    filelist, accellist = zip(*[[f,accel] for f,accel in sorted(zip(filelist, accellist))])
+            filelist.append(file)
+            if "embree" in file: accellist.append("Embree BVH")
+            elif "bvh" in file:
+                if "-bfs" in file: accellist.append("Quantized BVH")
+                else: accellist.append("Basic BVH")
+            elif "octree" in file:
+                if "-bfs" in file: accellist.append("1-Bit Octree")
+                else: accellist.append("Basic Octree")
+    if all(accel == accellist[0] for accel in accellist):
+        filelist, accellist = zip(*[[f,accel] for f,accel in sorted(zip(filelist, accellist))])
+    else:
+        filelist, accellist = zip(*[[f,accel] for f,accel in sorted(zip(filelist, accellist),
+                key = lambda pair: order[pair[1]])])
     filelist = list(filelist)
     accellist = list(accellist)
     # Retrieve stat for every different file
     statlist = []
     for file in filelist:
         fp = scene + "/" + file
-        if (tp == "prof"):
-            statlist.append(get_prof(fp, "Accelerator::Intersect()"))
-        elif (tp == "stat"):
-            statlist.append(get_stat(fp, key))
+        if (tp == "prof"): statlist.append(get_prof(fp, "Accelerator::Intersect()"))
+        elif (tp == "stat"): statlist.append(get_stat(fp, key))
         elif (tp == "dist"):
-            statlist.append(get_dist(fp, key)[0])
-    xlabel, ylabel, xitems, savepath = get_info(scene, accellist, filelist, tp, stat)
+            value = get_dist(fp, key)
+            if value == None: statlist.append(None)
+            else: statlist.append(value[0])
+        elif (tp == "mem"): statlist.append(get_mem(fp, key))
+    title, xlabel, ylabel, xitems, savepath = get_info(scene, accellist, filelist, tp, stat)
+    # embree doesnt have some stats
+    nostat_ids = []
+    for i in range(len(statlist)):
+        if statlist[i] == None: nostat_ids.append(i-len(nostat_ids))
+    for idx in nostat_ids:
+        del xitems[idx]
+        del statlist[idx]
+    # :(
+    plt.title("\n".join(wrap(title, 60)), y=1.08)
     plt.ylabel(ylabel)
     plt.xlabel(xlabel)
     plt.bar(xitems, statlist)
+    plt.xticks(fontsize=8)
+    plt.yticks(fontsize=8)
     plt.savefig(savepath, bbox_inches='tight', dpi=600)
 
 exec()
 
 ## System arguments format (in that order):
 ##   scene: crown, killeroo, etc.
-##   type: prof, time, stat:<name>, dist:<name>, mem:<memtype>
+##   type: prof, time, stat:<name>, dist:<name>, mem[:<memtype>]
 ##      name: primitive, chunk, leafnode, node
-##      memtype: total, topology
+##      memtype: topology
