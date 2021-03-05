@@ -97,11 +97,19 @@ def get_info(scene, accellist, filelist, tp, stat):
             savepath += '=' + stat
             ylabel += stat.capitalize()
         ylabel += " (Bytes)"
+    if tp == "memprof":
+        ylabel += "Execution Time (s) * Size of "
+        if stat == "":
+            ylabel += "Total Structure"
+        else:
+            savepath += '=' + stat
+            ylabel += stat.capitalize()
+        ylabel += " (Bytes)"
 
 
     filler = " for each " if " per " in ylabel else " per "
     title += ylabel + filler + xlabel + " for Scene \"" + scene.capitalize() + "\""
-    title = re.sub(r"\s\(.*\)", "", title)
+    title = re.sub(r"\s\([^()]*\)", "", title)
 
     savepath += '.pdf'
     return title, xlabel, ylabel, xitems, savepath
@@ -114,6 +122,7 @@ def exec():
         _ = tp.split(':')
         tp = _[0]
         stat = _[1]
+
     # Determine key (only needed for stat and dist and mem types)
     if tp == "stat" or tp == "dist":
         key = " - Intersects - "
@@ -122,9 +131,10 @@ def exec():
             if "leaf" in stat: key += "Leaf"
             else: key += "Total"
         else: key += stat.capitalize()
-    elif tp == "mem":
+    elif tp == "mem" or tp == "memprof":
         if stat == "topology": key = " topology"
         else: key = " tree"
+
     # Sort filelist alphabetically
     _filelist = os.listdir(scene)
     filelist = []
@@ -146,6 +156,7 @@ def exec():
                 key = lambda pair: order[pair[1]])])
     filelist = list(filelist)
     accellist = list(accellist)
+
     # Retrieve stat for every different file
     statlist = []
     for file in filelist:
@@ -157,6 +168,10 @@ def exec():
             if value == None: statlist.append(None)
             else: statlist.append(value[0])
         elif (tp == "mem"): statlist.append(get_mem(fp, key))
+        elif (tp == "memprof"):
+            mem = get_mem(fp, key)
+            if mem == None: statlist.append(None)
+            else: statlist.append(mem * get_prof(fp, "Accelerator::Intersect()"))
     title, xlabel, ylabel, xitems, savepath = get_info(scene, accellist, filelist, tp, stat)
     # embree doesnt have some stats
     nostat_ids = []
@@ -166,6 +181,8 @@ def exec():
         del xitems[idx]
         del statlist[idx]
     # :(
+
+    # plot
     plt.figure(figsize=(5, 5))
     plt.suptitle("\n".join(wrap(title, 55)), y=1)
     plt.ylabel(ylabel)
