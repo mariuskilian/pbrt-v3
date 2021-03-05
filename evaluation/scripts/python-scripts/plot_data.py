@@ -100,7 +100,8 @@ def get_info(scene, accellist, filelist, tp, stat):
 
 
     filler = " for each " if " per " in ylabel else " per "
-    title += ylabel + filler + xlabel
+    title += ylabel + filler + xlabel + " for Scene \"" + scene.capitalize() + "\""
+    title = re.sub(r"\s\(.*\)", "", title)
 
     savepath += '.pdf'
     return title, xlabel, ylabel, xitems, savepath
@@ -165,7 +166,7 @@ def exec():
         del xitems[idx]
         del statlist[idx]
     # :(
-    plt.title("\n".join(wrap(title, 60)), y=1.08)
+    plt.suptitle("\n".join(wrap(title, 60)), y=1.03)
     plt.ylabel(ylabel)
     plt.xlabel(xlabel)
     plt.bar(xitems, statlist)
