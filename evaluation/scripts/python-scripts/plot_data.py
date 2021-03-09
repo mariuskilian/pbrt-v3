@@ -29,11 +29,11 @@ def get_mem(path, key):
                 m = re.search(r"\s*(\d+.\d\d)\s*((?:Gi|Mi|k)B)", line)
                 if m == None: return None
                 if str(m[2]).startswith("Gi"):
-                    return 1000 * 1000 * 1000 * float(m[1])
-                elif str(m[2]).startswith("Mi"):
-                    return 1000 * 1000 * float(m[1])
-                elif str(m[2]).startswith('k'):
                     return 1000 * float(m[1])
+                elif str(m[2]).startswith("Mi"):
+                    return float(m[1])
+                elif str(m[2]).startswith('k'):
+                    return float(m[1]) / 1000
 
 def get_stat(path, category):
     with open(path) as f:
@@ -98,7 +98,7 @@ def get_info(scene, accellist, filelist, tp, stat):
         else:
             savepath += '=' + stat
             ylabel += stat.capitalize()
-        ylabel += " (Bytes)"
+        ylabel += " (MiB)"
     if tp == "memprof":
         ylabel += "Execution Time (s) * Size of "
         if stat == "":
@@ -106,7 +106,7 @@ def get_info(scene, accellist, filelist, tp, stat):
         else:
             savepath += '=' + stat
             ylabel += stat.capitalize()
-        ylabel += " (Bytes)"
+        ylabel += " (MiB)"
 
 
     filler = " for each " if " per " in ylabel else " per "
