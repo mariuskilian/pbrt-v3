@@ -706,7 +706,6 @@ bool BVHAccel::Intersect(const Ray &ray, SurfaceInteraction *isect) const {
                 num_leafNodes_intersected++;
                 #endif
                 // === COUNT STATS FOR LEAF NODES END ===
-                bvh_stat_primIntersectsTotal += node->nPrimitives;
                 if (toVisitOffset == 0) break;
                 currentNodeIndex = nodesToVisit[--toVisitOffset];
             } else {
