@@ -23,8 +23,8 @@ fi
 
 COUNT_STATS="-DCOUNT_STATS=False" # Because we want to compare time
 
-# cmake -S $SOURCE -B $BUILD $COUNT_STATS
-# make -C $BUILD -j
+cmake -S $SOURCE -B $BUILD $COUNT_STATS
+make -C $BUILD -j
 
 for i in $(seq $MIN 1 $MAX); do
     $RUN integer:maxprims=$i
