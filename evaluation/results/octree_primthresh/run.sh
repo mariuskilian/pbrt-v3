@@ -9,7 +9,7 @@ INTGR="path"
 ACCEL="octree"
 RUN="./../../scripts/start_eval.sh $INTGR $SCENE $ACCEL"
 SOURCE=../../..
-RUNPYSCRIPT=../../scripts/python-scripts
+PYSCRIPTS=../../scripts/python-scripts
 BUILD=$SOURCE/build/Evaluation
 
 if [ ! -d $SCENE ]
