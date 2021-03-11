@@ -12,7 +12,7 @@ def create_file(integrator, scene, accelerator, extra_args=[]):
             f.write("Integrator \"" + intgr[0] + "\"\n")
             f.write("\"string metric\" \"" + intgr[1] + "\"\n\n")
         else:
-            f.write("Sampler \"sobol\" \"integer pixelsamples\" 8\n\n")
+            f.write("Sampler \"sobol\" \"integer pixelsamples\" 4\n\n")
             if integrator == "path":
                 f.write("Integrator \"path\" \"integer maxdepth\" 20\n\n")
             else:
