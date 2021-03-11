@@ -66,10 +66,10 @@ def get_info(scene, accellist, filelist, tp, stat):
         title += accellist[0] + ": "
         if "maxprims=" in filelist[0]:
             xlabel = "Primitive Threshold"
-            xitems = [int(re.search(r"maxprims=(\d+)", file)[1]) for file in filelist]
+            xitems = [str(int(re.search(r"maxprims=(\d+)", file)[1])) for file in filelist]
         elif "multthresh=" in filelist[0]:
             xlabel = "Multiplication Threshold"
-            xitems = [float(re.search(r"multthresh=(\d.\d)", file)[1]) for file in filelist]
+            xitems = [str(float(re.search(r"multthresh=(\d.\d)", file)[1])) for file in filelist]
         else:
             xlabel = sys.argv[3]
             xitems = [re.search(r"=?(\d.\d)", file)[1] for file in filelist]
