@@ -1,6 +1,7 @@
 *~
 build
 scenes
+evaluation/plots
 evaluation/results/*/*
 !evaluation/results/*/run.sh
 src/build

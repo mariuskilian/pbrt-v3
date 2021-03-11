@@ -3,6 +3,7 @@ set -e
 SCENE=$1
 MIN=$2
 MAX=$3
+STEP=$4
 
 INTGR="path"
 ACCEL="octree"
@@ -26,7 +27,7 @@ COUNT_STATS="-DCOUNT_STATS=False" # Because we want to compare time
 cmake -S $SOURCE -B $BUILD $COUNT_STATS
 make -C $BUILD -j
 
-for i in $(seq $MIN 1 $MAX); do
+for i in $(seq $MIN $STEP $MAX); do
     $RUN integer:maxprims=$i
 done
 
