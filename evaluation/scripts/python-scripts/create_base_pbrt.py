@@ -22,8 +22,13 @@ def create_file(integrator, scene, accelerator, extra_args=[]):
             if line != "":
                 var_type = line.split(':')[0]
                 var_info = line.split(':')[1].split('=')
-                f.write("\"" + var_type + " " + var_info[0] + "\" " + var_info[1] + "\n")
-        f.write("Include \"" + scene + ".pbrt\"\n\n")
+                pbrt_arg = "\"" + var_type + " " + var_info[0] + "\" "
+                if var_type == "string":
+                    pbrt_arg += "\"" + var_info[1] + "\"\n"
+                else:
+                    pbrt_arg += var_info[1] + "\n"
+                f.write(pbrt_arg)
+        f.write("\nInclude \"" + scene + ".pbrt\"\n\n")
         f.close()
     
 def exec():

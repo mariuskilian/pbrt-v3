@@ -9,7 +9,7 @@ SCENE=$2
 ACCEL=$3
 
 # Find any extra parameters
-EXTRA_ARGS="# Custom extra arguments;"
+EXTRA_ARGS="#CustomExtraArguments;"
 FILENAME_POSTFIX=""
 i=1;
 for arg in "$@" 
