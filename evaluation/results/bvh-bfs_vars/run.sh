@@ -32,6 +32,5 @@ cmake -S $SOURCE -B $BUILD $COUNT_STATS "-DREL_KEYS=False"
 make -C $BUILD -j
 $RUN "string:relkeys=false"
 
-python3 $PYSCRIPTS/normalize_filename_num_digits.py $SCENE
 python3 $PYSCRIPTS/plot_data.py $SCENE prof
 python3 $PYSCRIPTS/plot_data.py $SCENE mem:topology
