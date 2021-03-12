@@ -61,7 +61,7 @@ def get_info(scene, accellist, filelist, tp, stat):
     test_type = ""
     if test_name.endswith("_stats") or test_name.endswith("_time"):
         test_type = test_name.split('_')[-1] + '_'
-        test_name = test_name.rstrip(test_type).rstrip('_')
+        test_name = test_name[:-len(test_name.split('_')[-1])].rstrip('_')
     savepath += test_name + '_' + scene + '_' + test_type + tp
 
     title = ""
