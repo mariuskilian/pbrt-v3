@@ -1,9 +1,6 @@
 set -e
 
 SCENE=$1
-MIN=$2
-MAX=$3
-STEP=$4
 
 INTGR="path"
 ACCEL="bvh-bfs"
