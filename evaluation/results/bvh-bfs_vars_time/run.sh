@@ -33,4 +33,3 @@ make -C $BUILD -j
 $RUN "string:relkeys=false"
 
 python3 $PYSCRIPTS/plot_data.py $SCENE prof
-python3 $PYSCRIPTS/plot_data.py $SCENE mem:topology
