@@ -57,7 +57,12 @@ def get_dist(path, category):
 
 def get_info(scene, accellist, filelist, tp, stat):
     savepath = sys.argv[0].rstrip("plot_data.py") + "/../../plots/"
-    savepath += str(os.getcwd()).split('/')[-1] + '_' + scene + '_' + tp
+    test_name = str(os.getcwd()).split('/')[-1]
+    test_type = ""
+    if test_name.endswith("_stats") or test_name.endswith("_time"):
+        test_type = test_name.split('_')[-1] + '_'
+        test_name = test_name.rstrip(test_type).rstrip('_')
+    savepath += test_name + '_' + scene + '_' + test_type + tp
 
     title = ""
 
