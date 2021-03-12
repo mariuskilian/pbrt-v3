@@ -227,6 +227,12 @@ BVHChunkBFSAccel::BVHChunkBFSAccel(std::vector<std::shared_ptr<Primitive>> p,
       splitMethod(splitMethod) {
     printf("Chosen Accelerator: BVH w/ BFS Chunks\n");
 
+    #if defined (REL_KEYS)
+    printf("REL_KEYS=True; Quantization Keys Relative to Parent Node\n");
+    #else
+    printf("REL_KEYS=False; Quantization Keys Relative to Chunk Root Node\n");
+    #endif
+
     #if defined (COUNT_STATS)
     // prim_isects_per_ray = new std::vector<int>();
     #endif

@@ -72,7 +72,7 @@ def get_info(scene, accellist, filelist, tp, stat):
             xitems = [str(float(re.search(r"multthresh=(\d.\d)", file)[1])) for file in filelist]
         elif "relkeys=" in filelist[0]:
             xlabel = "Quantization Key Root Node"
-            xlabel = ["Parent Node" if "=true" in f else "Chunk Root Node" for f in filelist]
+            xitems = ["Parent Node" if "=true" in f else "Chunk Root Node" for f in filelist]
         else:
             xlabel = sys.argv[3]
             xitems = [re.search(r"=?(\d.\d)", file)[1] for file in filelist]

@@ -777,6 +777,14 @@ std::shared_ptr<Primitive> MakeAccelerator(
     const std::string &name,
     std::vector<std::shared_ptr<Primitive>> prims,
     const ParamSet &paramSet) {
+    // PRINTING CMAKE STATS
+    #if defined (COUNT_STATS)
+    printf("COUNT_STATS=True; Counting intersection stats\n");
+    #else
+    printf("COUNT_STATS=False; Not counting intersection stats\n");
+    #endif
+    printf("CHUNK_SIZE=%i; BF_SIZE=%i", chunksize, bfsize);
+    // END PRINT
     std::shared_ptr<Primitive> accel;
     if      (name == "bvh")
         accel = CreateBVHAccelerator(std::move(prims), paramSet);

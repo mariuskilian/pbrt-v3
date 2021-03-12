@@ -202,6 +202,7 @@ bool BoundsContainPoint(Bounds3f &b, Point3f &p) {
 OctreeBasicAccel::OctreeBasicAccel(std::vector<std::shared_ptr<Primitive>> p)
         : primitives(std::move(p)) {
     printf("Chosen Accelerator: Octree\n");
+    printf("Octree Variables: Primitive Threshold = %i; Multiplication Threshold = %f\n", MAX_PRIMS, MULT_THRESH);
 
     for (int i = 0; i < 3; i++) { wb.pMin[i] = FLT_MAX; wb.pMax[i] = -FLT_MAX; }
 
