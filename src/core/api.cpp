@@ -783,7 +783,7 @@ std::shared_ptr<Primitive> MakeAccelerator(
     #else
     printf("COUNT_STATS=False; Not counting intersection stats\n");
     #endif
-    printf("CHUNK_SIZE=%i; BF_SIZE=%i", chunksize, bfsize);
+    printf("CHUNK_SIZE=%i; BF_SIZE=%i\n", chunksize, bfsize);
     // END PRINT
     std::shared_ptr<Primitive> accel;
     if      (name == "bvh")
