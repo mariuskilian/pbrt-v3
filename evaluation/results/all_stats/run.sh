@@ -17,11 +17,13 @@ then
     mkdir output
 fi
 
-cmake -S $SOURCE -B $BUILD -DCOUNT_STATS=True -DREL_KEYS=True -DBF_SIZE=64 -DCHUNK_SIZE=64
-make -C $BUILD -j
+if ! getopts p flag; then
+    cmake -S $SOURCE -B $BUILD -DCOUNT_STATS=True -DREL_KEYS=True -DBF_SIZE=64 -DCHUNK_SIZE=64
+    make -C $BUILD -j
 
-$RUN "bvh"
-$RUN "bvh-bfs"
-$RUN "octree"
-$RUN "octree-bfs"
-$RUN "embree"
+    $RUN "bvh"
+    $RUN "bvh-bfs"
+    $RUN "octree"
+    $RUN "octree-bfs"
+    $RUN "embree"
+fi
