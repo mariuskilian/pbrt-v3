@@ -22,7 +22,7 @@ then
     mkdir output
 fi
 
-if ! getopts p flag; then
+if ! [[ $* == *--skip-render* ]]; then
     COUNT_STATS="-DCOUNT_STATS=False" # Because we want to compare time
 
     cmake -S $SOURCE -B $BUILD $COUNT_STATS

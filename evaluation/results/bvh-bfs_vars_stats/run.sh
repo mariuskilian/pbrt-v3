@@ -19,7 +19,7 @@ then
     mkdir output
 fi
 
-if ! getopts p flag; then
+if ! [[ $* == *--skip-render* ]]; then
     COUNT_STATS="-DCOUNT_STATS=True"
 
     cmake -S $SOURCE -B $BUILD $COUNT_STATS "-DREL_KEYS=True"

@@ -17,7 +17,7 @@ then
     mkdir output
 fi
 
-if ! getopts p flag; then
+if ! [[ $* == *--skip-render* ]]; then
     cmake -S $SOURCE -B $BUILD -DCOUNT_STATS=True -DREL_KEYS=True -DBF_SIZE=64 -DCHUNK_SIZE=64
     make -C $BUILD -j
 

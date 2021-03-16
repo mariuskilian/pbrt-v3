@@ -17,7 +17,7 @@ then
     mkdir output
 fi
 
-if ! getopts p flag; then
+if ! [[ $* == *--skip-render* ]]; then
     COUNT_STATS="COUNT_STATS=False"
 
     BFSIZE="BF_SIZE=32"
