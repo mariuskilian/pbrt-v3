@@ -10,7 +10,7 @@ def get_nIsects(path):
     with open(path) as f:
         for line in f:
             if "Regular ray intersection tests" in line:
-                return int(re.search(r"(d+)", line)[1])
+                return int(re.search(r"(\d+)", line)[1])
 
 def get_prof(path, key):
     with open(path) as f:
