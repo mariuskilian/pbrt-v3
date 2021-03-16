@@ -6,8 +6,13 @@ from textwrap import wrap
 
 order={"Embree BVH":0, "Basic BVH":10, "Quantized BVH":20, "k-d Tree":30, "Basic Octree":40, "1-Bit Octree":50}
 
+def get_nIsects(path):
+    with open(path) as f:
+        for line in f:
+            if "Regular ray intersection tests" in line:
+                return int(re.search(r"(d+)", line)[1])
+
 def get_prof(path, key):
-    # extract value of flattened profile key in seconds from file path
     with open(path) as f:
         # Skip to Profile (flattened) section in file
         for line in f:
@@ -88,7 +93,7 @@ def get_info(scene, accellist, filelist, tp, stat):
     # y label
     ylabel = ""
     # Time
-    if tp == "prof" or tp == "time": ylabel += "Execution Time (s)"
+    if tp == "prof" or tp == "time": ylabel += "Intersection Time per Ray (μs)"
     # Stats
     if tp == "dist": ylabel += "Average "
     if tp == "stat" or tp  == "dist":
@@ -171,7 +176,10 @@ def exec():
     statlist = []
     for file in filelist:
         fp = scene + "/" + file
-        if (tp == "prof"): statlist.append(get_prof(fp, "Accelerator::Intersect()"))
+        if (tp == "prof"):
+            time = get_prof(fp, "Accelerator::Intersect()")
+            nIsects = get_nIsects(fp)
+            statlist.append(1000 * 1000 * time / nIsects)
         elif (tp == "stat"): statlist.append(get_stat(fp, key))
         elif (tp == "dist"):
             value = get_dist(fp, key)
