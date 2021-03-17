@@ -3,6 +3,7 @@ import re
 import sys
 import os
 from textwrap import wrap
+import argparse
 
 order={"Embree BVH":0, "Basic BVH":10, "Quantized BVH":20, "k-d Tree":30, "Basic Octree":40, "1-Bit Octree":50}
 
@@ -129,6 +130,17 @@ def get_info(scene, accellist, filelist, tp, stat):
     savepath += '.pdf'
     return title, xlabel, ylabel, xitems, savepath
 
+def plot(title, xlabel, ylabel, xitems, savepath, statlist):
+    plt.figure(figsize=(5, 5))
+    plt.suptitle("\n".join(wrap(title, 55)), y=1)
+    plt.ylabel(ylabel)
+    plt.xlabel(xlabel)
+    plt.bar(xitems, statlist)
+    plt.xticks(rotation=45)
+    plt.xticks(fontsize=8)
+    plt.yticks(fontsize=8)
+    plt.savefig(savepath, bbox_inches='tight', dpi=600)
+
 def exec():
     # Format input params
     scene = sys.argv[1]
@@ -200,17 +212,14 @@ def exec():
         del xitems[idx]
         del statlist[idx]
     # :(
+    
+    parser = argparse.ArgumentParser(description="Process render data from pbrt")
+    parser.add_argument("--plot", action='store_true', default=False)
+    parser.add_argument("--tex", action='store_true', default=False)
+    args = parser.parse_args()
 
-    # plot
-    plt.figure(figsize=(5, 5))
-    plt.suptitle("\n".join(wrap(title, 55)), y=1)
-    plt.ylabel(ylabel)
-    plt.xlabel(xlabel)
-    plt.bar(xitems, statlist)
-    plt.xticks(rotation=45)
-    plt.xticks(fontsize=8)
-    plt.yticks(fontsize=8)
-    plt.savefig(savepath, bbox_inches='tight', dpi=600)
+    if args.plot:
+        plot(title, xlabel, ylabel, xitems, savepath, statlist)
 
 exec()
 
