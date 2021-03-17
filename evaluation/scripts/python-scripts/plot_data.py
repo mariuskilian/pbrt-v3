@@ -190,6 +190,7 @@ def exec():
             mem = get_mem(fp, key)
             if mem == None: statlist.append(None)
             else: statlist.append(mem * get_prof(fp, "Accelerator::Intersect()"))
+
     title, xlabel, ylabel, xitems, savepath = get_info(scene, accellist, filelist, tp, stat)
     # embree doesnt have some stats
     nostat_ids = []
@@ -206,6 +207,7 @@ def exec():
     plt.ylabel(ylabel)
     plt.xlabel(xlabel)
     plt.bar(xitems, statlist)
+    plt.xticks(rotation=90)
     plt.xticks(fontsize=8)
     plt.yticks(fontsize=8)
     plt.savefig(savepath, bbox_inches='tight', dpi=600)
