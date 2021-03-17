@@ -129,8 +129,8 @@ OcChunkBFSAccel::OcChunkBFSAccel(std::vector<std::shared_ptr<Primitive>> p, cons
             sizes.size() * sizeof(sizes[0]) +
             octree.size() * sizeof(octree[0]);
 
-    octreebfs_num_totalPrims = octreebfs_stat_num_prims;
-    octreebfs_num_uniquePrims = primitives.size();
+    octreebfs_num_totalPrims += octreebfs_stat_num_prims;
+    octreebfs_num_uniquePrims += primitives.size();
     //lh_dump("visualize_bfs.obj");
     //lh_dump_dfs("visualize_dfs.obj");
 }

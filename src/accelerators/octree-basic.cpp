@@ -285,8 +285,8 @@ OctreeBasicAccel::OctreeBasicAccel(std::vector<std::shared_ptr<Primitive>> p)
             leaves.size() * sizeof(leaves[0]);
     octree_mem_top += sizeof(nodes) + nodes.size() * sizeof(nodes[0]);
 
-    octree_num_totalPrims = octree_stat_num_prims;
-    octree_num_uniquePrims = primitives.size();
+    octree_num_totalPrims += octree_stat_num_prims;
+    octree_num_uniquePrims += primitives.size();
 
     // lh_dump("visualize_basic.obj");
 }
