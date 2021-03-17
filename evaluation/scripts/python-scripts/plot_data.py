@@ -216,7 +216,7 @@ def exec():
     parser = argparse.ArgumentParser(description="Process render data from pbrt")
     parser.add_argument("--plot", action='store_true', default=False)
     parser.add_argument("--tex", action='store_true', default=False)
-    args = parser.parse_args()
+    args, unknown = parser.parse_known_args()
 
     if args.plot:
         plot(title, xlabel, ylabel, xitems, savepath, statlist)
