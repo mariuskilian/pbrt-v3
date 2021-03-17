@@ -12,6 +12,12 @@ PYSCRIPTS=../../scripts/python-scripts
 BUILD=$SOURCE/build/Evaluation
 RUN="./../../scripts/start_eval.sh $INTGR $SCENE $BUILD $ACCEL"
 
+for arg in "$@"; do
+    if [[ $arg == "-n="* ]]; then
+        NPIXELSAMPLES=$arg
+    fi
+done
+
 if [ ! -d $SCENE ]
 then
     mkdir $SCENE
@@ -29,7 +35,7 @@ if ! [[ $* == *--skip-render* ]]; then
     make -C $BUILD -j
 
     for i in $(seq $MIN $STEP $MAX); do
-        $RUN integer:maxprims=$i
+        $RUN integer:maxprims=$i $NPIXELSAMPLES
     done
 fi
 

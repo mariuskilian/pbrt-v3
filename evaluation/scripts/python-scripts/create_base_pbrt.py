@@ -1,7 +1,8 @@
 import os
 import sys
+import argparse
 
-def create_file(integrator, scene, accelerator, extra_args=[]):
+def create_file(integrator, scene, accelerator, npixelsamples, extra_args=[]):
     path = str(sys.argv[0]).split("create_base_pbrt.py")[0]
     path += "../../../scenes/" + scene 
     if os.path.exists(path + "/" + scene + ".pbrt"):
@@ -36,6 +37,9 @@ def exec():
     scene = str(sys.argv[2])
     accelerator = str(sys.argv[3])
     extra_args = str(sys.argv[4]).split(';')[1:]
-    create_file(integrator, scene, accelerator, extra_args)
+    parser = argparse.ArgumentParser(description="Creates base .pbrt file in specified folder")
+    parser.add_argument("--npixelsamples", type=int, default=4)
+    args = parser.parse_args()
+    create_file(integrator, scene, accelerator, args.npixelsamples, extra_args)
 
 exec()

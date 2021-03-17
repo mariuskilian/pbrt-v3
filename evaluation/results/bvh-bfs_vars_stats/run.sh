@@ -9,6 +9,12 @@ SOURCE=../../..
 PYSCRIPTS=../../scripts/python-scripts
 BUILD=$SOURCE/build/Evaluation
 
+for arg in "$@"; do
+    if [[ $arg == "-n="* ]]; then
+        NPIXELSAMPLES=$arg
+    fi
+done
+
 if [ ! -d $SCENE ]
 then
     mkdir $SCENE
@@ -25,12 +31,12 @@ if ! [[ $* == *--skip-render* ]]; then
     BUILD1="$BUILD-1"
     cmake -S $SOURCE -B $BUILD1 $COUNT_STATS "-DREL_KEYS=True"
     make -C $BUILD1 -j
-    $RUN $BUILD1 "string:relkeys=true"
+    $RUN $BUILD1 "string:relkeys=true" $NPIXELSAMPLES
 
     BUILD2="$BUILD-2"
     cmake -S $SOURCE -B $BUILD2 $COUNT_STATS "-DREL_KEYS=False"
     make -C $BUILD2 -j
-    $RUN $BUILD2 "string:relkeys=false"
+    $RUN $BUILD2 "string:relkeys=false" $NPIXELSAMPLES
 fi
 
 python3 $PYSCRIPTS/plot_data.py $SCENE stat:primitive --plot
