@@ -207,7 +207,7 @@ def exec():
     plt.ylabel(ylabel)
     plt.xlabel(xlabel)
     plt.bar(xitems, statlist)
-    plt.xticks(rotation=90)
+    plt.xticks(rotation=45)
     plt.xticks(fontsize=8)
     plt.yticks(fontsize=8)
     plt.savefig(savepath, bbox_inches='tight', dpi=600)
