@@ -6,6 +6,10 @@ INTGR="path"
 RUN="./../../scripts/start_eval.sh $INTGR $SCENE"
 SOURCE=../../..
 BUILD=$SOURCE/build/Evaluation
+BUILD1="$BUILD-1"
+BUILD2="$BUILD-2"
+BUILD2="$BUILD-3"
+BUILD2="$BUILD-4"
 
 if [ ! -d $SCENE ]
 then
@@ -22,33 +26,33 @@ if ! [[ $* == *--skip-render* ]]; then
 
     BFSIZE="BF_SIZE=32"
     CHUNKSIZE="CHUNK_SIZE=64"
-    cmake -S $SOURCE -B $BUILD -D$COUNT_STATS -D$BFSIZE -D$CHUNKSIZE
-    make -C $BUILD -j
+    cmake -S $SOURCE -B $BUILD1 -D$COUNT_STATS -D$BFSIZE -D$CHUNKSIZE
+    make -C $BUILD1 -j
     FILENAME_POSTFIX="integer:$BFSIZE integer:$CHUNKSIZE"
-    $RUN "octree-bfs" $FILENAME_POSTFIX
-    $RUN "bvh-bfs" $FILENAME_POSTFIX
+    $RUN $BUILD1 "octree-bfs" $FILENAME_POSTFIX
+    $RUN $BUILD1 "bvh-bfs" $FILENAME_POSTFIX
 
     BFSIZE="BF_SIZE=32"
     CHUNKSIZE="CHUNK_SIZE=128"
-    cmake -S $SOURCE -B $BUILD $COUNT_STATS -D$BFSIZE -D$CHUNKSIZE
-    make -C $BUILD -j
+    cmake -S $SOURCE -B $BUILD2 $COUNT_STATS -D$BFSIZE -D$CHUNKSIZE
+    make -C $BUILD2 -j
     FILENAME_POSTFIX="integer:$BFSIZE integer:$CHUNKSIZE"
-    $RUN "octree-bfs" $FILENAME_POSTFIX
-    $RUN "bvh-bfs" $FILENAME_POSTFIX
+    $RUN $BUILD2 "octree-bfs" $FILENAME_POSTFIX
+    $RUN $BUILD2 "bvh-bfs" $FILENAME_POSTFIX
 
     BFSIZE="BF_SIZE=64"
     CHUNKSIZE="CHUNK_SIZE=64"
-    cmake -S $SOURCE -B $BUILD $COUNT_STATS -D$BFSIZE -D$CHUNKSIZE
-    make -C $BUILD -j
+    cmake -S $SOURCE -B $BUILD3 $COUNT_STATS -D$BFSIZE -D$CHUNKSIZE
+    make -C $BUILD3 -j
     FILENAME_POSTFIX="integer:$BFSIZE integer:$CHUNKSIZE"
-    $RUN "octree-bfs" $FILENAME_POSTFIX
-    $RUN "bvh-bfs" $FILENAME_POSTFIX
+    $RUN $BUILD3 "octree-bfs" $FILENAME_POSTFIX
+    $RUN $BUILD3 "bvh-bfs" $FILENAME_POSTFIX
 
     BFSIZE="BF_SIZE=64"
     CHUNKSIZE="CHUNK_SIZE=128"
-    cmake -S $SOURCE -B $BUILD $COUNT_STATS -D$BFSIZE -D$CHUNKSIZE
-    make -C $BUILD -j
+    cmake -S $SOURCE -B $BUILD4 $COUNT_STATS -D$BFSIZE -D$CHUNKSIZE
+    make -C $BUILD4 -j
     FILENAME_POSTFIX="integer:$BFSIZE integer:$CHUNKSIZE"
-    $RUN "octree-bfs" $FILENAME_POSTFIX
-    $RUN "bvh-bfs" $FILENAME_POSTFIX
+    $RUN $BUILD4 "octree-bfs" $FILENAME_POSTFIX
+    $RUN $BUILD4 "bvh-bfs" $FILENAME_POSTFIX
 fi

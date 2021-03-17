@@ -3,9 +3,9 @@ set -e
 SCENE=$1
 
 INTGR="path"
-RUN="./../../scripts/start_eval.sh $INTGR $SCENE"
 SOURCE=../../..
 BUILD=$SOURCE/build/Evaluation
+RUN="./../../scripts/start_eval.sh $INTGR $SCENE $BUILD"
 
 if [ ! -d $SCENE ]
 then
