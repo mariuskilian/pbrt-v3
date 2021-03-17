@@ -15,7 +15,7 @@ FILENAME_POSTFIX=""
 i=1;
 for arg in "$@" 
 do
-    if [ $i -gt 3 ]
+    if [ $i -gt 4 ]
     then
         if [[ $arg == "-n="* ]]; then
             NPIXELSAMPLES="--npixelsamples ${arg:3}"

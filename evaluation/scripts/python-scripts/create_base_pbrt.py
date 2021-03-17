@@ -13,7 +13,7 @@ def create_file(integrator, scene, accelerator, npixelsamples, extra_args=[]):
             f.write("Integrator \"" + intgr[0] + "\"\n")
             f.write("\"string metric\" \"" + intgr[1] + "\"\n\n")
         else:
-            f.write("Sampler \"sobol\" \"integer pixelsamples\" 4\n\n")
+            f.write("Sampler \"sobol\" \"integer pixelsamples\" " + str(npixelsamples) + "\n\n")
             if integrator == "path":
                 f.write("Integrator \"path\" \"integer maxdepth\" 20\n\n")
             else:
@@ -39,7 +39,7 @@ def exec():
     extra_args = str(sys.argv[4]).split(';')[1:]
     parser = argparse.ArgumentParser(description="Creates base .pbrt file in specified folder")
     parser.add_argument("--npixelsamples", type=int, default=4)
-    args = parser.parse_args()
+    args, unknown = parser.parse_known_args()
     create_file(integrator, scene, accelerator, args.npixelsamples, extra_args)
 
 exec()
