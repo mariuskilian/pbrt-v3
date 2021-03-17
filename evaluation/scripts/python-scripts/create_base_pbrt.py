@@ -33,7 +33,6 @@ def create_file(integrator, scene, accelerator, npixelsamples, extra_args=[]):
         f.close()
     
 def exec():
-    print(sys.argv)
     integrator = str(sys.argv[1])
     scene = str(sys.argv[2])
     accelerator = str(sys.argv[3])
