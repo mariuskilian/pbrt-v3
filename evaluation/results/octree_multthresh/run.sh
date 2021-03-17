@@ -33,5 +33,5 @@ if ! [[ $* == *--skip-render* ]]; then
     done
 fi
 
-python3 $PYSCRIPTS/plot_data.py $SCENE prof
-python3 $PYSCRIPTS/plot_data.py $SCENE mem:topology
+python3 $PYSCRIPTS/plot_data.py $SCENE prof --plot
+python3 $PYSCRIPTS/plot_data.py $SCENE mem:topology --plot

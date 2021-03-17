@@ -33,4 +33,4 @@ if ! [[ $* == *--skip-render* ]]; then
     $RUN $BUILD2 "string:relkeys=false"
 fi
 
-python3 $PYSCRIPTS/plot_data.py $SCENE prof
+python3 $PYSCRIPTS/plot_data.py $SCENE prof --plot
