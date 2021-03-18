@@ -191,7 +191,10 @@ def exec():
         if (tp == "prof"):
             time = get_prof(fp, "Accelerator::Intersect()")
             nIsects = get_nIsects(fp)
-            statlist.append(1000 * 1000 * time / nIsects)
+            if time == None or nIsects == None:
+                statlist.append(None)
+            else:
+                statlist.append(1000 * 1000 * time / nIsects)
         elif (tp == "stat"): statlist.append(get_stat(fp, key))
         elif (tp == "dist"):
             value = get_dist(fp, key)
