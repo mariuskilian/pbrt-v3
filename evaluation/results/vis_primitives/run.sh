@@ -3,10 +3,10 @@ set -e
 SCENE=$1
 
 INTGR="metric=primitives"
-RUN="./../../scripts/start_eval.sh $INTGR $SCENE"
 SOURCE=../../..
 PYSCRIPTS=../../scripts/python-scripts
 BUILD=$SOURCE/build/Evaluation
+RUN="./../../scripts/start_eval.sh $INTGR $SCENE $BUILD"
 
 for arg in "$@"; do
     if [[ $arg == "-n="* ]]; then

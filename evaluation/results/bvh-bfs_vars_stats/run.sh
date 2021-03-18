@@ -4,7 +4,7 @@ SCENE=$1
 
 INTGR="path"
 ACCEL="bvh-bfs"
-RUN="./../../scripts/start_eval.sh $INTGR $SCENE $ACCEL"
+RUN="./../../scripts/start_eval.sh $INTGR $SCENE"
 SOURCE=../../..
 PYSCRIPTS=../../scripts/python-scripts
 BUILD=$SOURCE/build/Evaluation
@@ -31,12 +31,12 @@ if ! [[ $* == *--skip-render* ]]; then
     BUILD1="$BUILD-1"
     cmake -S $SOURCE -B $BUILD1 $COUNT_STATS "-DREL_KEYS=True"
     make -C $BUILD1 -j
-    $RUN $BUILD1 "string:relkeys=true" $NPIXELSAMPLES
+    $RUN $BUILD1 $ACCEL "string:relkeys=true" $NPIXELSAMPLES
 
     BUILD2="$BUILD-2"
     cmake -S $SOURCE -B $BUILD2 $COUNT_STATS "-DREL_KEYS=False"
     make -C $BUILD2 -j
-    $RUN $BUILD2 "string:relkeys=false" $NPIXELSAMPLES
+    $RUN $BUILD2 $ACCEL "string:relkeys=false" $NPIXELSAMPLES
 fi
 
 python3 $PYSCRIPTS/plot_data.py $SCENE dist:primitive --plot
