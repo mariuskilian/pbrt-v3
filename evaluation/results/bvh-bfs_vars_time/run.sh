@@ -28,12 +28,12 @@ fi
 if ! [[ $* == *--skip-render* ]]; then
     COUNT_STATS="-DCOUNT_STATS=False" # Because we want to compare time
 
-    BUILD1="$BUILD-1"
+    BUILD1="$BUILD-3"
     cmake -S $SOURCE -B $BUILD1 $COUNT_STATS "-DREL_KEYS=True"
     make -C $BUILD1 -j
     $RUN $BUILD1 $ACCEL "string:relkeys=true" $NPIXELSAMPLES
 
-    BUILD2="$BUILD-2"
+    BUILD2="$BUILD-4"
     cmake -S $SOURCE -B $BUILD2 $COUNT_STATS "-DREL_KEYS=False"
     make -C $BUILD2 -j
     $RUN $BUILD2 $ACCEL "string:relkeys=false" $NPIXELSAMPLES
