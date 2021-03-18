@@ -39,10 +39,4 @@ if ! [[ $* == *--skip-render* ]]; then
     $RUN $BUILD2 "string:relkeys=false" $NPIXELSAMPLES
 fi
 
-python3 $PYSCRIPTS/plot_data.py $SCENE stat:primitive --plot
-python3 $PYSCRIPTS/plot_data.py $SCENE stat:node --plot
-python3 $PYSCRIPTS/plot_data.py $SCENE stat:leafnode --plot
-
 python3 $PYSCRIPTS/plot_data.py $SCENE dist:primitive --plot
-python3 $PYSCRIPTS/plot_data.py $SCENE dist:node --plot
-python3 $PYSCRIPTS/plot_data.py $SCENE dist:leafnode --plot
