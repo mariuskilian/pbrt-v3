@@ -98,9 +98,9 @@ def get_info(scenes, accellist, filelist, tp, stat):
             xitems = [re.search(r"=?(\d.\d)", file)[1] for file in filelist]
     else:
         xlabel = "Acceleration Structure"
-        if len(scenes) > 1:
-            xitems = [accellist[i] + "\n(" + filelist[i].split('/')[0].capitalize() + ')' for i in range(len(accellist))]
-        else: xitems = accellist
+        xitems = accellist
+    if len(scenes) > 1:
+        xitems = [xitems[i] + "\n(" + filelist[i].split('/')[0].capitalize() + ')' for i in range(len(xitems))]
 
     # y label
     ylabel = ""
