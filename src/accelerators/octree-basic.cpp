@@ -330,7 +330,7 @@ OctreeBasicAccel::OctreeBasicAccel(){}
 // }
 
 std::shared_ptr<OctreeBasicAccel> CreateOctreeBasicAccelerator(std::vector<std::shared_ptr<Primitive>> prims, const ParamSet &ps) {
-    int max_prims = ps.FindOneInt("maxprims", 32);
+    int max_prims = ps.FindOneInt("maxprims", 20);
     float mult_thresh = ps.FindOneFloat("multthresh", 2.0);
     MAX_PRIMS = max_prims;
     MULT_THRESH = mult_thresh;
