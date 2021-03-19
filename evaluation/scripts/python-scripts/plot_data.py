@@ -165,7 +165,7 @@ def show(title, xlabel, ylabel, xitems, savepath, statlist):
 
 def exec():
     # Format input params
-    scenes = sys.argv[1].split(';')
+    scenes = sys.argv[1].split(',')
     tp, stat = sys.argv[2], ""
     if ':' in tp:
         _ = tp.split(':')
