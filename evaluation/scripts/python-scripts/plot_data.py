@@ -143,7 +143,7 @@ def plot(title, xlabel, ylabel, xitems, savepath, statlist):
 
 def exec():
     # Format input params
-    scene = sys.argv[1]
+    scenes = sys.argv[1].split(';')
     tp, stat = sys.argv[2], ""
     if ':' in tp:
         _ = tp.split(':')
@@ -163,19 +163,20 @@ def exec():
         else: key = " tree"
 
     # Sort filelist alphabetically
-    _filelist = os.listdir(scene)
     filelist = []
     accellist = []
-    for file in _filelist:
-        if file.endswith(".log"):
-            filelist.append(file)
-            if "embree" in file: accellist.append("Embree BVH")
-            elif "bvh" in file:
-                if "-bfs" in file: accellist.append("Quantized BVH")
-                else: accellist.append("Basic BVH")
-            elif "octree" in file:
-                if "-bfs" in file: accellist.append("1-Bit Octree")
-                else: accellist.append("Basic Octree")
+    for scene in scenes:
+        _filelist = os.listdir(scene)
+        for file in _filelist:
+            if file.endswith(".log"):
+                filelist.append(file)
+                if "embree" in file: accellist.append("Embree BVH")
+                elif "bvh" in file:
+                    if "-bfs" in file: accellist.append("Quantized BVH")
+                    else: accellist.append("Basic BVH")
+                elif "octree" in file:
+                    if "-bfs" in file: accellist.append("1-Bit Octree")
+                    else: accellist.append("Basic Octree")
     if all(accel == accellist[0] for accel in accellist):
         filelist, accellist = zip(*[[f,accel] for f,accel in sorted(zip(filelist, accellist))])
     else:
