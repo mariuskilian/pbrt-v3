@@ -79,7 +79,7 @@ if ! [[ $* == *--skip-render* ]]; then
         $RUN $BUILD4 "octree-bfs" $FILENAME_POSTFIX $NPIXELSAMPLES
 
         # Scripts to have per scene plots should go here
-    fi
+    done
 fi
 
 #Scripts to have plot show all scenes at once should go here
