@@ -6,6 +6,7 @@ INTGR="path"
 RUN="./../../scripts/start_eval.sh $INTGR"
 SOURCE=../../..
 BUILD=$SOURCE/build/Evaluation
+PYSCRIPTS=../../scripts/python-scripts
 BUILD1="$BUILD-1"
 BUILD2="$BUILD-2"
 BUILD3="$BUILD-3"
