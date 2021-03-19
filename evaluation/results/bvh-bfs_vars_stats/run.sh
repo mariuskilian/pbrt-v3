@@ -43,4 +43,4 @@ if ! [[ $* == *--skip-render* ]]; then
     done
 fi
 
-python3 $PYSCRIPTS/plot_data.py $SCENE dist:primitive --plot
+python3 $PYSCRIPTS/plot_data.py $SCENES dist:primitive --plot

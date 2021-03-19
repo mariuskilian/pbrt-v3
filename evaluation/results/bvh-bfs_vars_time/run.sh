@@ -45,4 +45,4 @@ if ! [[ $* == *--skip-render* ]]; then
     done
 fi
 
-python3 $PYSCRIPTS/plot_data.py $SCENE prof --plot
+python3 $PYSCRIPTS/plot_data.py $SCENES prof --plot
