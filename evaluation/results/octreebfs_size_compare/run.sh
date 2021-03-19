@@ -11,9 +11,13 @@ NPIXELSAMPLES=-n=1
 SCENE1=crown
 SCENE2=measure-one
 
-if [ ! -d $SCENE ]
+if [ ! -d $SCENE1 ]
 then
-    mkdir $SCENE
+    mkdir $SCENE1
+fi
+if [ ! -d $SCENE2 ]
+then
+    mkdir $SCENE2
 fi
 
 if [ ! -d "output" ]
@@ -25,7 +29,7 @@ if ! [[ $* == *--skip-render* ]]; then
     COUNT_STATS="-DCOUNT_STATS=False" # Because we want to compare time
 
     cmake -S $SOURCE -B $BUILD
-    make -C $BUILD1 -j
+    make -C $BUILD -j
 
     $RUN $SCENE1 $BUILD octree $NPIXELSAMPLES
     $RUN $SCENE2 $BUILD octree $NPIXELSAMPLES
