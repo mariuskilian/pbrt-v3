@@ -53,9 +53,9 @@ static Float MULT_THRESH;
 
 // Size of chunk array of type BITFIELD_X below
 #if defined (CHUNKSIZE16)
-  const int bytes_free = 8
+  const int bytes_free = 8;
 #elif defined (CHUNKSIZE32)
-  const int bytes_free = 24
+  const int bytes_free = 24;
 #elif defined (CHUNKSIZE64)
   const int bytes_free = 56;
 #elif defined (CHUNKSIZE128)
