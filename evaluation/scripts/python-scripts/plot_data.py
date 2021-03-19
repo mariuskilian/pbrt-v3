@@ -267,12 +267,12 @@ def exec():
 
     if args.plot or args.show:
         print("\n\nPlot information:\n")
-        print("Title: " + title)
-        print("xLabel: " + xlabel)
-        print("yLabel: " + ylabel)
-        print("xItems: " + xitems)
+        print("Title:\t" + title)
+        print("xLabel:\t" + xlabel)
+        print("yLabel:\t" + ylabel)
+        print("xItems:\t" + str(xitems))
         if args.plot:
-            print("Savepath: " + savepath)
+            print("Savepath:\t" + savepath)
             plot(title, xlabel, ylabel, xitems, savepath, statlist)
         if args.show:
             show(title, xlabel, ylabel, xitems, savepath, statlist)
