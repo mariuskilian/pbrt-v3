@@ -37,26 +37,26 @@ if ! [[ $* == *--skip-render* ]]; then
         COUNT_STATS="COUNT_STATS=False"
 
         CHUNKSIZE="CHUNK_SIZE=16"
-        cmake -S $SOURCE -B $BUILD1 -D$COUNT_STATS -D$BFSIZE -D$CHUNKSIZE
+        cmake -S $SOURCE -B $BUILD1 -D$COUNT_STATS -D$CHUNKSIZE
         make -C $BUILD1 -j
         FILENAME_POSTFIX="integer:$CHUNKSIZE"
         $RUN $SCENE $BUILD1 "octree-bfs" $FILENAME_POSTFIX $NPIXELSAMPLES
 
         CHUNKSIZE="CHUNK_SIZE=32"
-        cmake -S $SOURCE -B $BUILD1 -D$COUNT_STATS -D$BFSIZE -D$CHUNKSIZE
-        make -C $BUILD1 -j
+        cmake -S $SOURCE -B $BUILD2 -D$COUNT_STATS -D$CHUNKSIZE
+        make -C $BUILD2 -j
         FILENAME_POSTFIX="integer:$CHUNKSIZE"
         $RUN $SCENE $BUILD2 "octree-bfs" $FILENAME_POSTFIX $NPIXELSAMPLES
 
         CHUNKSIZE="CHUNK_SIZE=64"
-        cmake -S $SOURCE -B $BUILD1 -D$COUNT_STATS -D$BFSIZE -D$CHUNKSIZE
-        make -C $BUILD2 -j
+        cmake -S $SOURCE -B $BUILD3 -D$COUNT_STATS -D$CHUNKSIZE
+        make -C $BUILD3 -j
         FILENAME_POSTFIX="integer:$CHUNKSIZE"
         $RUN $SCENE $BUILD3 "octree-bfs" $FILENAME_POSTFIX $NPIXELSAMPLES
 
         CHUNKSIZE="CHUNK_SIZE=128"
-        cmake -S $SOURCE -B $BUILD2 $COUNT_STATS -D$BFSIZE -D$CHUNKSIZE
-        make -C $BUILD3 -j
+        cmake -S $SOURCE -B $BUILD4 -D$COUNT_STATS -D$CHUNKSIZE
+        make -C $BUILD4 -j
         FILENAME_POSTFIX="integer:$CHUNKSIZE"
         $RUN $SCENE $BUILD4 "octree-bfs" $FILENAME_POSTFIX $NPIXELSAMPLES
 

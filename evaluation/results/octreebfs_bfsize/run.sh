@@ -36,28 +36,28 @@ if ! [[ $* == *--skip-render* ]]; then
         fi
         COUNT_STATS="COUNT_STATS=False"
 
-        CHUNKSIZE="CHUNK_SIZE=16"
-        cmake -S $SOURCE -B $BUILD1 -D$COUNT_STATS -D$BFSIZE -D$CHUNKSIZE
+        BFSIZE="BF_SIZE=8"
+        cmake -S $SOURCE -B $BUILD1 -D$COUNT_STATS -D$BFSIZE
         make -C $BUILD1 -j
-        FILENAME_POSTFIX="integer:$CHUNKSIZE"
+        FILENAME_POSTFIX="integer:$BFSIZE"
         $RUN $SCENE $BUILD1 "octree-bfs" $FILENAME_POSTFIX $NPIXELSAMPLES
 
-        CHUNKSIZE="CHUNK_SIZE=32"
-        cmake -S $SOURCE -B $BUILD1 -D$COUNT_STATS -D$BFSIZE -D$CHUNKSIZE
-        make -C $BUILD1 -j
-        FILENAME_POSTFIX="integer:$CHUNKSIZE"
+        BFSIZE="BF_SIZE=16"
+        cmake -S $SOURCE -B $BUILD2 -D$COUNT_STATS -D$BFSIZE
+        make -C $BUILD2 -j
+        FILENAME_POSTFIX="integer:$BFSIZE"
         $RUN $SCENE $BUILD2 "octree-bfs" $FILENAME_POSTFIX $NPIXELSAMPLES
 
-        CHUNKSIZE="CHUNK_SIZE=64"
-        cmake -S $SOURCE -B $BUILD1 -D$COUNT_STATS -D$BFSIZE -D$CHUNKSIZE
-        make -C $BUILD2 -j
-        FILENAME_POSTFIX="integer:$CHUNKSIZE"
+        BFSIZE="BF_SIZE=32"
+        cmake -S $SOURCE -B $BUILD3 -D$COUNT_STATS -D$BFSIZE
+        make -C $BUILD3 -j
+        FILENAME_POSTFIX="integer:$BFSIZE"
         $RUN $SCENE $BUILD3 "octree-bfs" $FILENAME_POSTFIX $NPIXELSAMPLES
 
-        CHUNKSIZE="CHUNK_SIZE=128"
-        cmake -S $SOURCE -B $BUILD2 $COUNT_STATS -D$BFSIZE -D$CHUNKSIZE
-        make -C $BUILD3 -j
-        FILENAME_POSTFIX="integer:$CHUNKSIZE"
+        BFSIZE="BF_SIZE=64"
+        cmake -S $SOURCE -B $BUILD4 -D$COUNT_STATS -D$BFSIZE
+        make -C $BUILD4 -j
+        FILENAME_POSTFIX="integer:$BFSIZE"
         $RUN $SCENE $BUILD4 "octree-bfs" $FILENAME_POSTFIX $NPIXELSAMPLES
 
         # Scripts to have per scene plots should go here
