@@ -93,6 +93,11 @@ def get_info(scenes, accellist, filelist, tp, stat):
         elif "relkeys=" in filelist[0]:
             xlabel = "Quantization Key Root Node"
             xitems = ["Parent Node" if "=true" in f else "Chunk Root Node" for f in filelist]
+        elif "BF_SIZE=" in filelist[0]:
+            xlabel = "Chunk Parameters"
+            bfsizes = [str(int(re.search(r"BF_SIZE=(\d+)", file)[1])) for file in filelist]
+            chunksizes = [str(int(re.search(r"CHUNK_SIZE=(\d+)", file)[1])) for file in filelist]
+            xitems = ["Bitfield Size: " + bfsizes[i] + " bits\nChunk Size " + chunksizes[i] + " Bytes" for i in range(len(filelist))]
         else:
             xlabel = sys.argv[3]
             xitems = [re.search(r"=?(\d.\d)", file)[1] for file in filelist]
