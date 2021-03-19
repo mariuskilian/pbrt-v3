@@ -172,6 +172,12 @@ def exec():
         tp = _[0]
         stat = _[1]
 
+    print("\nplot_data.py:\nProcessing scenes: ")
+    print(scenes)
+    print("\n\nType:")
+    print(tp, stat)
+    print('\n')
+
     # Determine key (only needed for stat and dist and mem types)
     if tp == "stat" or tp == "dist":
         key = " - Intersects - "
@@ -211,6 +217,7 @@ def exec():
     filelist = list(filelist)
     accellist = list(accellist)
     print(filelist)
+    print(accellist)
 
     # Retrieve stat for every different file
     statlist = []
@@ -240,6 +247,7 @@ def exec():
                 if mem == None: statlist.append(None)
                 else: statlist.append(mem * get_prof(fp, "Accelerator::Intersect()"))
             else: statlist.append(mem)
+    print(statlist)
 
     title, xlabel, ylabel, xitems, savepath = get_info(scenes, accellist, filelist, tp, stat)
     # embree doesnt have some stats
@@ -257,10 +265,18 @@ def exec():
     parser.add_argument("--tex", action='store_true', default=False)
     args, _ = parser.parse_known_args()
 
-    if args.plot:
-        plot(title, xlabel, ylabel, xitems, savepath, statlist)
-    if args.show:
-        show(title, xlabel, ylabel, xitems, savepath, statlist)
+    if args.plot or args.show:
+        print("\n\nPlot information:\n")
+        print("Title: " + title)
+        print("xLabel: " + xlabel)
+        print("yLabel: " + ylabel)
+        print("xItems: " + xitems)
+        if args.plot:
+            print("Savepath: " + savepath)
+            plot(title, xlabel, ylabel, xitems, savepath, statlist)
+        if args.show:
+            show(title, xlabel, ylabel, xitems, savepath, statlist)
+        print('\n')
 
 exec()
 
