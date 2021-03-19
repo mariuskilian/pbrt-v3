@@ -5,7 +5,14 @@ import os
 from textwrap import wrap
 import argparse
 
-order={"Embree BVH":0, "Basic BVH":10, "Quantized BVH":20, "k-d Tree":30, "Basic Octree":40, "1-Bit Octree":50}
+OCTREE = "Basic Octree"
+OCTREEBFS = "1-Bit Octree"
+BVH = "Basic BVH"
+BVHBFS = "Quantized BVH"
+EMBREE = "Embree BVH"
+KDTREE = "k-d Tree"
+
+order={EMBREE:10, BVH:20, BVHBFS:30, KDTREE:40, OCTREE:50, OCTREEBFS:60}
 
 def get_nIsects(path):
     with open(path) as f:
@@ -61,14 +68,16 @@ def get_dist(path, category):
                 return float(m[1]), int(m[2]), int(m[3])
 
 
-def get_info(scene, accellist, filelist, tp, stat):
+def get_info(scenes, accellist, filelist, tp, stat):
     savepath = sys.argv[0].rstrip("plot_data.py") + "/../../plots/"
     test_name = str(os.getcwd()).split('/')[-1]
     test_type = ""
     if test_name.endswith("_stats") or test_name.endswith("_time"):
         test_type = test_name.split('_')[-1] + '_'
         test_name = test_name[:-len(test_name.split('_')[-1])].rstrip('_')
-    savepath += test_name + '_' + scene + '_' + test_type + tp
+    savepath += test_name + '_'
+    for scene in scenes: savepath += scene + ':'
+    savepath = savepath[:-1] + '_' + test_type + tp
 
     title = ""
 
@@ -89,7 +98,9 @@ def get_info(scene, accellist, filelist, tp, stat):
             xitems = [re.search(r"=?(\d.\d)", file)[1] for file in filelist]
     else:
         xlabel = "Acceleration Structure"
-        xitems = accellist
+        if len(scenes) > 1:
+            xitems = [accellist[i] + "\n(" + filelist[i].split('/')[0].capitalize() + ')' for i in range(len(accellist))]
+        else: xitems = accellist
 
     # y label
     ylabel = ""
@@ -124,22 +135,33 @@ def get_info(scene, accellist, filelist, tp, stat):
 
 
     filler = " for each " if " per " in ylabel else " per "
-    title += ylabel + filler + xlabel + " for Scene \"" + scene.capitalize() + "\""
+    title += ylabel + filler + xlabel + " for Scene"
+    if len(scenes) > 1: title += 's'
+    title += " "
+    for scene in scenes: title += '\"' + scene.capitalize() + "\", "
+    title = title[:-2]
     title = re.sub(r"\s\([^()]*\)", "", title)
 
     savepath += '.pdf'
     return title, xlabel, ylabel, xitems, savepath
 
-def plot(title, xlabel, ylabel, xitems, savepath, statlist):
+def plot_conf(title, xlabel, ylabel, xitems, savepath, statlist):
     plt.figure(figsize=(5, 5))
     plt.suptitle("\n".join(wrap(title, 55)), y=1)
     plt.ylabel(ylabel)
     plt.xlabel(xlabel)
     plt.bar(xitems, statlist)
-    plt.xticks(rotation=45)
+    if len(statlist) > 5: plt.xticks(rotation=45)
     plt.xticks(fontsize=8)
     plt.yticks(fontsize=8)
+
+def plot(title, xlabel, ylabel, xitems, savepath, statlist):
+    plot_conf(title, xlabel, ylabel, xitems, savepath, statlist)
     plt.savefig(savepath, bbox_inches='tight', dpi=600)
+
+def show(title, xlabel, ylabel, xitems, savepath, statlist):
+    plot_conf(title, xlabel, ylabel, xitems, savepath, statlist)
+    plt.show()
 
 def exec():
     # Format input params
@@ -169,26 +191,31 @@ def exec():
         _filelist = os.listdir(scene)
         for file in _filelist:
             if file.endswith(".log"):
-                filelist.append(file)
-                if "embree" in file: accellist.append("Embree BVH")
+                filelist.append(scene + '/' + file)
+                if "embree" in file: accellist.append(EMBREE)
                 elif "bvh" in file:
-                    if "-bfs" in file: accellist.append("Quantized BVH")
-                    else: accellist.append("Basic BVH")
+                    if "-bfs" in file: accellist.append(BVHBFS)
+                    else: accellist.append(BVH)
                 elif "octree" in file:
-                    if "-bfs" in file: accellist.append("1-Bit Octree")
-                    else: accellist.append("Basic Octree")
+                    if "-bfs" in file: accellist.append(OCTREEBFS)
+                    else: accellist.append(OCTREE)
     if all(accel == accellist[0] for accel in accellist):
         filelist, accellist = zip(*[[f,accel] for f,accel in sorted(zip(filelist, accellist))])
     else:
-        filelist, accellist = zip(*[[f,accel] for f,accel in sorted(zip(filelist, accellist),
-                key = lambda pair: order[pair[1]])])
+        def sort(pair):
+            res = ""
+            if len(scenes) > 1: res += pair[0].split('/')[0]
+            res += str(order[pair[1]])
+            return res
+        filelist, accellist = zip(*[[f,accel] for f,accel in sorted(zip(filelist, accellist), key = lambda pair: sort(pair))])
     filelist = list(filelist)
     accellist = list(accellist)
+    print(filelist)
 
     # Retrieve stat for every different file
     statlist = []
-    for file in filelist:
-        fp = scene + "/" + file
+    for i in range(len(filelist)):
+        fp = filelist[i] #filepath
         if (tp == "prof"):
             time = get_prof(fp, "Accelerator::Intersect()")
             nIsects = get_nIsects(fp)
@@ -201,13 +228,20 @@ def exec():
             value = get_dist(fp, key)
             if value == None: statlist.append(None)
             else: statlist.append(value[0])
-        elif (tp == "mem"): statlist.append(get_mem(fp, key))
-        elif (tp == "memprof"):
-            mem = get_mem(fp, key)
-            if mem == None: statlist.append(None)
-            else: statlist.append(mem * get_prof(fp, "Accelerator::Intersect()"))
+        elif "mem" in tp:
+            fullkey = ""
+            if accellist[i] == OCTREEBFS: fullkey += "Octree-BFS"
+            elif accellist[i] == OCTREE: fullkey += "Octree"
+            elif accellist[i] == BVHBFS: fullkey += "BVH-BFS"
+            elif accellist[i] == BVH: fullkey += "BVH"
+            fullkey += key
+            mem = get_mem(fp, fullkey)
+            if tp == "memprof":
+                if mem == None: statlist.append(None)
+                else: statlist.append(mem * get_prof(fp, "Accelerator::Intersect()"))
+            else: statlist.append(mem)
 
-    title, xlabel, ylabel, xitems, savepath = get_info(scene, accellist, filelist, tp, stat)
+    title, xlabel, ylabel, xitems, savepath = get_info(scenes, accellist, filelist, tp, stat)
     # embree doesnt have some stats
     nostat_ids = []
     for i in range(len(statlist)):
@@ -219,11 +253,14 @@ def exec():
     
     parser = argparse.ArgumentParser(description="Process render data from pbrt")
     parser.add_argument("--plot", action='store_true', default=False)
+    parser.add_argument("--show", action='store_true', default=False)
     parser.add_argument("--tex", action='store_true', default=False)
     args, _ = parser.parse_known_args()
 
     if args.plot:
         plot(title, xlabel, ylabel, xitems, savepath, statlist)
+    if args.show:
+        show(title, xlabel, ylabel, xitems, savepath, statlist)
 
 exec()
 

@@ -1,10 +1,10 @@
 set -e
 
-SCENE=$1
+SCENES=$1
 
 INTGR="path"
 ACCEL="bvh-bfs"
-RUN="./../../scripts/start_eval.sh $INTGR $SCENE"
+RUN="./../../scripts/start_eval.sh $INTGR"
 SOURCE=../../..
 PYSCRIPTS=../../scripts/python-scripts
 BUILD=$SOURCE/build/Evaluation
@@ -15,28 +15,34 @@ for arg in "$@"; do
     fi
 done
 
-if [ ! -d $SCENE ]
-then
-    mkdir $SCENE
-fi
-
 if [ ! -d "output" ]
 then
     mkdir output
 fi
 
+
+
 if ! [[ $* == *--skip-render* ]]; then
     COUNT_STATS="-DCOUNT_STATS=False" # Because we want to compare time
-
     BUILD1="$BUILD-3"
-    cmake -S $SOURCE -B $BUILD1 $COUNT_STATS "-DREL_KEYS=True"
-    make -C $BUILD1 -j
-    $RUN $BUILD1 $ACCEL "string:relkeys=true" $NPIXELSAMPLES
-
     BUILD2="$BUILD-4"
-    cmake -S $SOURCE -B $BUILD2 $COUNT_STATS "-DREL_KEYS=False"
-    make -C $BUILD2 -j
-    $RUN $BUILD2 $ACCEL "string:relkeys=false" $NPIXELSAMPLES
+
+    SCENE_LIST=($(echo $SCENES | tr "," "\n"))
+    for i in $(seq 0 1 $((${#SCENE_LIST[@]} - 1))); do
+        SCENE=${SCENE_LIST[$i]}
+        
+        if [ ! -d $SCENE ]; then
+            mkdir $SCENE
+        fi
+
+        cmake -S $SOURCE -B $BUILD1 $COUNT_STATS "-DREL_KEYS=True"
+        make -C $BUILD1 -j
+        $RUN $SCENE $BUILD1 $ACCEL "string:relkeys=true" $NPIXELSAMPLES
+
+        cmake -S $SOURCE -B $BUILD2 $COUNT_STATS "-DREL_KEYS=False"
+        make -C $BUILD2 -j
+        $RUN $SCENE $BUILD2 $ACCEL "string:relkeys=false" $NPIXELSAMPLES
+    done
 fi
 
 python3 $PYSCRIPTS/plot_data.py $SCENE prof --plot
