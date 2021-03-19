@@ -31,7 +31,9 @@ enum class metric { PRIMITIVES, NODES, LEAFNODES, TIME };
   static const bool relative_keys = false;
 #endif
     
-#if defined (CHUNKSIZE64)
+#if defined (CHUNKSIZE32)
+  static const int chunksize = 32;
+#elif defined (CHUNKSIZE64)
   static const int chunksize = 64;
 #elif defined (CHUNKSIZE128)
   static const int chunksize = 128;

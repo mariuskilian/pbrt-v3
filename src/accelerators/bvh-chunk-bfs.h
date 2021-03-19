@@ -72,7 +72,7 @@ class BVHChunkBFSAccel : public Aggregate {
   private:
     struct BVHChunkBFS;
 
-    #if defined (CHUNKSIZE64)
+    #if defined (CHUNKSIZE16) || defined (CHUNKSIZE32) || defined (CHUNKSIZE64)
       static const int bytes_free = 24;
       #define chunk_alignment 64
     #elif defined (CHUNKSIZE128)
