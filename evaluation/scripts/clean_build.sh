@@ -1,5 +1,3 @@
-set -e
-
 BUILD=../../build
 
 rm $BUILD/Evaluation/* -r
