@@ -65,3 +65,5 @@ if ! [[ $* == *--skip-render* ]]; then
 fi
 
 #Scripts to have plot show all scenes at once should go here
+python3 $PYSCRIPTS/plot_data.py $SCENES prof --plot
+python3 $PYSCRIPTS/plot_data.py $SCENES mem:topology --plot
