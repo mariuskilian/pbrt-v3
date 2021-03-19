@@ -10,6 +10,7 @@ NPIXELSAMPLES=-n=1
 
 SCENE1=crown
 SCENE2=measure-one
+SCENES="$SCENE1;$SCENE2"
 
 if [ ! -d $SCENE1 ]
 then
@@ -37,5 +38,5 @@ if ! [[ $* == *--skip-render* ]]; then
     $RUN $SCENE2 $BUILD octree-bfs $NPIXELSAMPLES
 fi
 
-python3 $PYSCRIPTS/plot_data.py $SCENE mem --plot
-python3 $PYSCRIPTS/plot_data.py $SCENE mem:topology --plot
+python3 $PYSCRIPTS/plot_data.py $SCENES mem --plot
+python3 $PYSCRIPTS/plot_data.py $SCENES mem:topology --plot
