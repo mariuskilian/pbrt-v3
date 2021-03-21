@@ -67,6 +67,24 @@ def get_dist(path, category):
                 m = re.search(r"(\d+.\d\d\d) avg \[range (\d+.?\d*) - (\d+.?\d*)\]", line)
                 return float(m[1]), int(m[2]), int(m[3])
 
+def get_accelInfo(path, key, stat):
+    with open(path) as f:
+        for line in f:
+            if key in line:
+                if stat == "duplprims":
+                    # Duplicate Primitives                          11891548 /      3540215 (3.36x)
+                    m = re.search(r"\s*\d+\s*/\s*\d+\s*\((\d+\.\d*)x\)", line)
+                    return float(m[1])
+                elif stat == "chunks":
+                    # Chunks - # Total                                                43523
+                    m = re.search(r"Total\s*(\d+)", line)
+                    return int(m[1])
+                elif "chunkfill" in stat:
+                    # Chunks - Fill %                                                 31.570 avg [range 12.500000 - 100.000000]
+                    m = re.search(r"\s*(\d+\.\d*)\s*avg\s*\[range\s*(\d+\.\d*)\s*-\s*(\d+\.\d*)", line)
+                    if stat == "chunkfill": return float(m[1])
+                    elif stat == "chunkfillmin": return float(m[2])
+                    elif stat == "chunkfillmax": return float(m[3])
 
 def get_info(scenes, accellist, filelist, tp, stat):
     savepath = sys.argv[0].rstrip("plot_data.py") + "../../plots/"
@@ -78,6 +96,7 @@ def get_info(scenes, accellist, filelist, tp, stat):
     savepath += test_name + '_'
     for scene in scenes: savepath += scene + ':'
     savepath = savepath[:-1] + '_' + test_type + tp
+    if stat != "": savepath += '=' + stat
 
     title = ""
 
@@ -115,7 +134,6 @@ def get_info(scenes, accellist, filelist, tp, stat):
     # Stats
     if tp == "dist": ylabel += "Average "
     if tp == "stat" or tp  == "dist":
-        savepath += '=' + stat
         ylabel += "Number of "
         if "leaf" in stat: ylabel += "Leaf "
         if "node" in stat: ylabel += "Node "
@@ -127,7 +145,6 @@ def get_info(scenes, accellist, filelist, tp, stat):
         if stat == "":
             ylabel += "Total Structure"
         else:
-            savepath += '=' + stat
             ylabel += stat.capitalize()
         ylabel += " (MiB)"
     if tp == "memprof":
@@ -135,10 +152,17 @@ def get_info(scenes, accellist, filelist, tp, stat):
         if stat == "":
             ylabel += "Total Structure"
         else:
-            savepath += '=' + stat
             ylabel += stat.capitalize()
         ylabel += " (MiB)"
-
+    if tp == "accel":
+        if stat == "chunks":
+            ylabel += "Total Number of Chunks"
+        elif stat == "chunkfill":
+            ylabel += "Average Chunk Fill Percentage (%)"
+        elif stat == "chunkfillmin":
+            ylabel += "Minimum Chunk Fill Percentage (%)"
+        elif stat == "duplprims":
+            ylabel += "Primitive Multiplication Factor"
 
     filler = " for each " if " per " in ylabel else " per "
     title += ylabel + filler + xlabel + " for Scene"
@@ -192,6 +216,10 @@ def exec():
     elif tp == "mem" or tp == "memprof":
         if stat == "topology": key = " topology"
         else: key = " tree"
+    elif tp == "accel":
+        if "chunkfill" in stat: key = "Chunks - Fill %"
+        elif stat == "chunks": key = "Chunks - # Total"
+        elif stat == "duplprims": key = "Duplicate Primitives"
 
     # Sort filelist alphabetically
     filelist = []
@@ -224,15 +252,15 @@ def exec():
     statlist = []
     for i in range(len(filelist)):
         fp = filelist[i] #filepath
-        if (tp == "prof"):
+        if tp == "prof":
             time = get_prof(fp, "Accelerator::Intersect()")
             nIsects = get_nIsects(fp)
             if time == None or nIsects == None:
                 statlist.append(None)
             else:
                 statlist.append(1000 * 1000 * time / nIsects)
-        elif (tp == "stat"): statlist.append(get_stat(fp, key))
-        elif (tp == "dist"):
+        elif tp == "stat": statlist.append(get_stat(fp, key))
+        elif tp == "dist":
             value = get_dist(fp, key)
             if value == None: statlist.append(None)
             else: statlist.append(value[0])
@@ -248,6 +276,9 @@ def exec():
                 if mem == None: statlist.append(None)
                 else: statlist.append(mem * get_prof(fp, "Accelerator::Intersect()"))
             else: statlist.append(mem)
+        elif tp == "accel":
+            accelinfo = get_accelInfo(fp, key, stat)
+            statlist.append(accelinfo)
 
     title, xlabel, ylabel, xitems, savepath = get_info(scenes, accellist, filelist, tp, stat)
     # embree doesnt have some stats
@@ -285,6 +316,7 @@ exec()
 
 ## System arguments format (in that order):
 ##   scene: crown, killeroo, etc.
-##   type: prof, time, stat:<name>, dist:<name>, mem[:<memtype>]
+##   type: prof, time, stat:<name>, dist:<name>, mem[:<memtype>], accel:<acceldata>
 ##      name: primitive, chunk, leafnode, node
 ##      memtype: topology
+##      acceldata: chunkfill, chunkfillmin, chunks, duplprims
