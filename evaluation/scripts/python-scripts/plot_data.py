@@ -87,15 +87,17 @@ def get_accelInfo(path, key, stat):
                     elif stat == "chunkfillmax": return float(m[3])
 
 def get_info(scenes, accellist, filelist, tp, stat):
-    savepath = sys.argv[0].rstrip("plot_data.py") + "../../plots/"
+    fullsavepath = [sys.argv[0].rstrip("plot_data.py") + "../../plots/"]
     test_name = str(os.getcwd()).split('/')[-1]
     test_type = ""
     if test_name.endswith("_stats") or test_name.endswith("_time"):
         test_type = test_name.split('_')[-1] + '_'
         test_name = test_name[:-len(test_name.split('_')[-1])].rstrip('_')
-    savepath += test_name + '_'
-    for scene in scenes: savepath += scene + ':'
-    savepath = savepath[:-1] + '_' + test_type + tp
+    fullsavepath.append(test_name)
+    scenenames = ""
+    for scene in scenes: scenenames += scene + ':'
+    fullsavepath.append(scenenames[:-1])
+    savepath = test_type + tp
     if stat != "": savepath += '=' + stat
 
     title = ""
@@ -173,7 +175,8 @@ def get_info(scenes, accellist, filelist, tp, stat):
     title = re.sub(r"\s\([^()]*\)", "", title)
 
     savepath += '.pdf'
-    return title, xlabel, ylabel, xitems, savepath
+    fullsavepath.append(savepath)
+    return title, xlabel, ylabel, xitems, fullsavepath
 
 def plot_conf(title, xlabel, ylabel, xitems, savepath, statlist):
     plt.figure(figsize=(5, 5))
@@ -280,7 +283,12 @@ def exec():
             accelinfo = get_accelInfo(fp, key, stat)
             statlist.append(accelinfo)
 
-    title, xlabel, ylabel, xitems, savepath = get_info(scenes, accellist, filelist, tp, stat)
+    title, xlabel, ylabel, xitems, fullsavepath = get_info(scenes, accellist, filelist, tp, stat)
+    savepath = ""
+    for path in fullsavepath[:-1]:
+        savepath += path + "/"
+        if not os.path.exists(savepath): os.mkdir(savepath)
+    savepath += fullsavepath[-1]
     # embree doesnt have some stats
     nostat_ids = []
     for i in range(len(statlist)):
