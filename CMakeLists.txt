@@ -713,4 +713,6 @@ INSTALL ( TARGETS
   # ==============================
     UNSET(COUNT_STATS CACHE)
     UNSET(REL_KEYS CACHE)
+    UNSET(CHUNK_SIZE CACHE)
+    UNSET(BF_SIZE CACHE)
   # ------------------------------
