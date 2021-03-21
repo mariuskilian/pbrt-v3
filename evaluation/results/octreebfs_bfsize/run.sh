@@ -6,6 +6,7 @@ INTGR="path"
 RUN="./../../scripts/start_eval.sh $INTGR"
 SOURCE=../../..
 BUILD=$SOURCE/build/Evaluation
+PYSCRIPTS=../../scripts/python-scripts
 BUILD1="$BUILD-1"
 BUILD2="$BUILD-2"
 BUILD3="$BUILD-3"
@@ -64,4 +65,10 @@ if ! [[ $* == *--skip-render* ]]; then
     done
 fi
 
+python3 $PYSCRIPTS/normalize_filename_num_digits.py $SCENES
 #Scripts to have plot show all scenes at once should go here
+PLOT_DATA="python3 $PYSCRIPTS/plot_data.py $SCENES"
+$PLOT_DATA prof --plot
+$PLOT_DATA mem:topology --plot
+$PLOT_DATA accel:chunkfill --plot
+$PLOT_DATA accel:chunks --plot
