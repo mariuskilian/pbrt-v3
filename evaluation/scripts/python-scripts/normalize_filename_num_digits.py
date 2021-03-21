@@ -22,7 +22,8 @@ def normalize_names(scene):
 
 
 def exec():
-    scene = sys.argv[1]
-    normalize_names(scene)
+    scenes = sys.argv[1].split(',')
+    for scene in scenes:
+        normalize_names(scene)
 
 exec()
