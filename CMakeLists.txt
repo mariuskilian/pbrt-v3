@@ -21,7 +21,7 @@ CMAKE_MINIMUM_REQUIRED ( VERSION 3.1.0 )
   # 1. Define default values and accepted values
   # ==============================
     SET(DEF_BF_SIZE 64)
-    SET(DEF_CHUNK_SIZE 64)
+    SET(DEF_CHUNK_SIZE 16)
 
     SET(_BF_SIZE "8;16;32;64")
     SET(_CHUNK_SIZE "16;32;64;128;256")
