@@ -118,8 +118,8 @@ def get_info(scenes, accellist, filelist, tp, stat):
             xlabel = "Chunk Size (Bytes)"
             xitems = [str(int(re.search(r"CHUNK_SIZE=(\d+)", file)[1])) for file in filelist]
         elif "BF_SIZE=" in filelist[0]:
-            xlabel = "Bitfield Size (Bits)"
-            xitems = [str(int(re.search(r"BF_SIZE=(\d+)", file)[1])) for file in filelist]
+            xlabel = "Bitfield Data Type"
+            xitems = ["uint" + str(int(re.search(r"BF_SIZE=(\d+)", file)[1])) for file in filelist]
         else:
             xlabel = sys.argv[3]
             xitems = [re.search(r"=?(\d.\d)", file)[1] for file in filelist]
