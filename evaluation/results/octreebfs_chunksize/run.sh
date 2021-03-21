@@ -65,6 +65,7 @@ if ! [[ $* == *--skip-render* ]]; then
     done
 fi
 
+python3 $PYSCRIPTS/normalize_filename_num_digits.py $SCENE
 #Scripts to have plot show all scenes at once should go here
 python3 $PYSCRIPTS/plot_data.py $SCENES prof --plot
 python3 $PYSCRIPTS/plot_data.py $SCENES mem:topology --plot
