@@ -28,8 +28,8 @@ if ! [[ $* == *--skip-render* ]]; then
             mkdir $SCENE
         fi
 
-        $RUN $SCENE $BUILD octree $NPIXELSAMPLES
-        $RUN $SCENE $BUILD octree-bfs $NPIXELSAMPLES
+        $RUN $SCENE $BUILD bvh $NPIXELSAMPLES
+        $RUN $SCENE $BUILD bvh-bfs $NPIXELSAMPLES
     done
 fi
 

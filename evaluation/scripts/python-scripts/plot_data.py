@@ -124,7 +124,8 @@ def get_info(scenes, accellist, filelist, tp, stat):
             xlabel = sys.argv[3]
             xitems = [re.search(r"=?(\d.\d)", file)[1] for file in filelist]
     else:
-        xlabel = "Acceleration Structure"
+        if tp.endswith("comp"): xlabel = "Scene"
+        else: xlabel = "Acceleration Structure"
         xitems = accellist
     if len(scenes) > 1:
         xitems = [xitems[i] + "\n(" + filelist[i].split('/')[0].capitalize() + ')' for i in range(len(xitems))]
@@ -142,7 +143,7 @@ def get_info(scenes, accellist, filelist, tp, stat):
         else: ylabel += stat.capitalize() + " "
         ylabel += "Intersections"
     if tp == "dist": ylabel += " per Ray"
-    if tp == "mem":
+    if tp == "mem" or tp == "memcomp":
         ylabel += "Size of "
         if stat == "":
             ylabel += "Total Structure"
@@ -167,34 +168,53 @@ def get_info(scenes, accellist, filelist, tp, stat):
             ylabel += "Primitive Multiplication Factor"
 
     filler = " for each " if " per " in ylabel else " per "
-    title += ylabel + filler + xlabel + " for Scene"
-    if len(scenes) > 1: title += 's'
-    title += " "
-    for scene in scenes: title += '\"' + scene.capitalize() + "\", "
-    title = title[:-2]
+    title += ylabel + filler + xlabel
+    if tp == "memcomp":
+        title = title.replace("Size of ", "Size Compression of ")
+    if not tp.endswith("comp"):
+        title += " for Scene"
+        if len(scenes) > 1: title += 's'
+        title += " "
+        for scene in scenes: title += '\"' + scene.capitalize() + "\", "
+        title = title[:-2]
     title = re.sub(r"\s\([^()]*\)", "", title)
 
     savepath += '.pdf'
     fullsavepath.append(savepath)
     return title, xlabel, ylabel, xitems, fullsavepath
 
-def plot_conf(title, xlabel, ylabel, xitems, savepath, statlist):
+def plot_conf(title, xlabel, ylabel, xitems, savepath, statlist, num_overlay=1):
     plt.figure(figsize=(5, 5))
     plt.suptitle("\n".join(wrap(title, 55)), y=1)
     plt.ylabel(ylabel)
     plt.xlabel(xlabel)
-    plt.bar(xitems, statlist)
-    if len(statlist) > 5: plt.xticks(rotation=45)
+    if num_overlay > 1:
+        statlists = [statlist[i::num_overlay] for i in range(num_overlay)]
+        scenes = {x.split('\n')[1] for x in xitems}
+        legend = [xitems[i].split('\n')[0] for i in range(len(scenes))]
+        print(xitems)
+        print(legend)
+        xitems = [x.split('\n')[1][1:-1] for x in xitems[::num_overlay]]
+        colrs = ['tab:blue', 'midnightblue']
+        alpha = [0.6, 1]
+        for i in range(num_overlay):
+            plt.bar(xitems, statlists[i], color=colrs[i], alpha = alpha[i], label = legend[i])
+        plt.legend()
+    else: plt.bar(xitems, statlist)
+    if (len(statlist)/num_overlay) > 5: plt.xticks(rotation=45)
     plt.xticks(fontsize=8)
     plt.yticks(fontsize=8)
 
-def plot(title, xlabel, ylabel, xitems, savepath, statlist):
-    plot_conf(title, xlabel, ylabel, xitems, savepath, statlist)
+def plot(title, xlabel, ylabel, xitems, savepath, statlist, num_overlay=1):
+    plot_conf(title, xlabel, ylabel, xitems, savepath, statlist, num_overlay)
     plt.savefig(savepath, bbox_inches='tight', dpi=600)
 
-def show(title, xlabel, ylabel, xitems, savepath, statlist):
-    plot_conf(title, xlabel, ylabel, xitems, savepath, statlist)
+def show(title, xlabel, ylabel, xitems, savepath, statlist, num_overlay=1):
+    plot_conf(title, xlabel, ylabel, xitems, savepath, statlist, num_overlay)
     plt.show()
+
+def debug(title, xlabel, ylabel, xitems, savepath, statlist, num_overlay=1):
+    plot_conf(title, xlabel, ylabel, xitems, savepath, statlist, num_overlay)
 
 def exec():
     # Format input params
@@ -209,6 +229,7 @@ def exec():
     print("\tType:", tp, stat)
 
     # Determine key (only needed for stat and dist and mem types)
+    num_overlay = 1
     if tp == "stat" or tp == "dist":
         key = " - Intersects - "
         if "node" in stat:
@@ -216,9 +237,10 @@ def exec():
             if "leaf" in stat: key += "Leaf"
             else: key += "Total"
         else: key += stat.capitalize()
-    elif tp == "mem" or tp == "memprof":
+    elif "mem" in tp:
         if stat == "topology": key = " topology"
         else: key = " tree"
+        if tp == "memcomp": num_overlay = 2
     elif tp == "accel":
         if "chunkfill" in stat: key = "Chunks - Fill %"
         elif stat == "chunks": key = "Chunks - # Total"
@@ -301,10 +323,11 @@ def exec():
     parser = argparse.ArgumentParser(description="Process render data from pbrt")
     parser.add_argument("--plot", action='store_true', default=False)
     parser.add_argument("--show", action='store_true', default=False)
+    parser.add_argument("--debug", action='store_true', default=False)
     parser.add_argument("--tex", action='store_true', default=False)
     args, _ = parser.parse_known_args()
 
-    if args.plot or args.show:
+    if args.plot or args.show or args.debug:
         print("Plot information:")
         print("\tTitle:\t", title)
         print("\txLabel:\t", xlabel)
@@ -315,9 +338,11 @@ def exec():
         print("\tAccels:\t", accellist)
         if args.plot:
             print("\tPath:\t" + savepath)
-            plot(title, xlabel, ylabel, xitems, savepath, statlist)
+            plot(title, xlabel, ylabel, xitems, savepath, statlist, num_overlay)
         if args.show:
-            show(title, xlabel, ylabel, xitems, savepath, statlist)
+            show(title, xlabel, ylabel, xitems, savepath, statlist, num_overlay)
+        if args.debug:
+            debug(title, xlabel, ylabel, xitems, savepath, statlist, num_overlay)
         print('\n')
 
 exec()
