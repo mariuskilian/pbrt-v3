@@ -35,4 +35,4 @@ fi
 
 PLOT="python3 $PYSCRIPTS/plot_data.py $SCENES"
 $PLOT memcomp --plot
-$PLOT memcomp:topology
+$PLOT memcomp:topology --plot
