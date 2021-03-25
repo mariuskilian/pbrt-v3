@@ -38,6 +38,6 @@ if ! [[ $* == *--skip-render* ]]; then
 fi
 
 PLOT="python3 $PYSCRIPTS/plot_data.py $SCENES"
-$PLOT dist:primimitive --plot
+$PLOT dist:primitive --plot
 $PLOT dist:leafnode --plot
 $PLOT dist:node --plot
