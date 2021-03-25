@@ -34,8 +34,6 @@ if ! [[ $* == *--skip-render* ]]; then
         $RUN "bvh" -n=1
         $RUN "bvh-bfs" -n=1
         $RUN "octree" -n=1
-        $RUN "octree-bfs" -n=1
-        $RUN "embree" -n=1
     done
 fi
 

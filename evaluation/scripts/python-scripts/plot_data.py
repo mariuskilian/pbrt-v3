@@ -130,7 +130,7 @@ def get_info(scenes, accellist, filelist, tp, stat):
             xlabel = sys.argv[3]
             xitems = [re.search(r"=?(\d.\d)", file)[1] for file in filelist]
     else:
-        if tp.endswith("comp"): xlabel = "Scene"
+        if tp.endswith("comp") or len(scenes) > 1: xlabel = "Scene"
         else: xlabel = "Acceleration Structure"
         xitems = accellist
     if len(scenes) > 1:
@@ -178,11 +178,14 @@ def get_info(scenes, accellist, filelist, tp, stat):
     if tp == "memcomp":
         title = title.replace("Size of ", "Size Compression of ")
     if not tp.endswith("comp"):
-        title += " for Scene"
-        if len(scenes) > 1: title += 's'
-        title += " "
-        for scene in scenes: title += '\"' + scene.capitalize() + "\", "
-        title = title[:-2]
+        if len(scenes) <= 3:
+            title += " for Scene"
+            if len(scenes) > 1: title += 's'
+            title += " "
+            for scene in scenes: title += '\"' + scene.capitalize() + "\", "
+            title = title[:-2]
+        else:
+            title += " for different Scenes"
     title = re.sub(r"\s\([^()]*\)", "", title)
 
     savepath += '.pdf'
@@ -238,13 +241,13 @@ def scenes_plot_conf(ax, xitems, statlist):
     for scene in dupl_scenes:
         if scene not in scenes: scenes.append(scene)
     numbars = int(len(xitems)/len(scenes))
-    statlists = [statlist[i::numbars] for i in range(len(scenes))]
+    statlists = [statlist[i::numbars] for i in range(numbars)]
     legend = [xitems[i].split('\n')[0] for i in range(numbars)]
     xitems = [scene[1:-1] for scene in scenes]
     data = {legend[i]:statlists[i] for i in range(len(legend))}
     bar_plot(ax, data)
     plt.bar(xitems, len(xitems) * [0])
-    if len(statlists) > 5: plt.xticks(rotation=45)
+    if len(scenes) > 5: plt.xticks(rotation=45)
 
 
 def visualize(title, xlabel, ylabel, xitems, savepath, statlist, plottype):

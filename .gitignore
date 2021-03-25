@@ -4,6 +4,7 @@ scenes
 evaluation/plots
 evaluation/results/*/*
 !evaluation/results/*/run.sh
+evaluation/scripts/python-scripts/testcases
 src/build
 src/bin
 src/objs
