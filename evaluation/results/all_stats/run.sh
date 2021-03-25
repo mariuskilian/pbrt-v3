@@ -31,11 +31,11 @@ if ! [[ $* == *--skip-render* ]]; then
             mkdir $SCENE
         fi
         RUN="$RUNPRE $SCENE $BUILD"
-        $RUN "bvh" $NPIXELSAMPLES
-        $RUN "bvh-bfs" $NPIXELSAMPLES
-        $RUN "octree" $NPIXELSAMPLES
-        $RUN "octree-bfs" $NPIXELSAMPLES
-        $RUN "embree" $NPIXELSAMPLES
+        $RUN "bvh" -n=1
+        $RUN "bvh-bfs" -n=1
+        $RUN "octree" -n=1
+        $RUN "octree-bfs" -n=1
+        $RUN "embree" -n=1
     done
 fi
 
