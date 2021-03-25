@@ -14,6 +14,8 @@ KDTREE = "k-d Tree"
 
 order={EMBREE:10, BVH:20, BVHBFS:30, KDTREE:40, OCTREE:50, OCTREEBFS:60}
 
+# === GET VALUES FROM LOG FILES ===
+
 def get_nIsects(path):
     with open(path) as f:
         for line in f:
@@ -85,6 +87,10 @@ def get_accelInfo(path, key, stat):
                     if stat == "chunkfill": return float(m[1])
                     elif stat == "chunkfillmin": return float(m[2])
                     elif stat == "chunkfillmax": return float(m[3])
+
+# =========
+
+# === GET META INFORMATION FOR PLOTS === 
 
 def get_info(scenes, accellist, filelist, tp, stat):
     fullsavepath = [sys.argv[0].rstrip("plot_data.py") + "../../plots/"]
@@ -183,38 +189,83 @@ def get_info(scenes, accellist, filelist, tp, stat):
     fullsavepath.append(savepath)
     return title, xlabel, ylabel, xitems, fullsavepath
 
-def plot_conf(title, xlabel, ylabel, xitems, savepath, statlist, num_overlay=1):
-    plt.figure(figsize=(5, 5))
+# =========
+
+# === PLOT CONFIGURATIONS ===
+
+def bar_plot(ax, data, colors=None, total_width=0.8, single_width=1, legend=True):
+    # Check if colors where provided, otherwhise use the default color cycle
+    if colors is None:
+        colors = plt.rcParams['axes.prop_cycle'].by_key()['color']
+    # Number of bars per group
+    n_bars = len(data)
+    # The width of a single bar
+    bar_width = total_width / n_bars
+    # List containing handles for the drawn bars, used for the legend
+    bars = []
+    # Iterate over all data
+    for i, (_, values) in enumerate(data.items()):
+        # The offset in x direction of that bar
+        x_offset = (i - n_bars / 2) * bar_width + bar_width / 2
+        # Draw a bar for every value of that type
+        for x, y in enumerate(values):
+            bar = ax.bar(x + x_offset, y, width=bar_width * single_width, color=colors[i % len(colors)])
+        # Add a handle to the last drawn bar, which we'll need for the legend
+        bars.append(bar[0])
+    # Draw legend if we need
+    if legend:
+        ax.legend(bars, data.keys())
+
+def plot_conf(ax, xitems, statlist):
+    plt.bar(xitems, statlist)
+    if len(statlist) > 5: plt.xticks(rotation=45)
+
+def comp_plot_conf(ax, xitems, statlist):
+    statlists = [statlist[i::2] for i in range(2)]
+    scenes = {x.split('\n')[1] for x in xitems}
+    legend = [xitems[i].split('\n')[0] for i in range(len(scenes))]
+    xitems = [x.split('\n')[1][1:-1] for x in xitems[::2]]
+    colrs = ['tab:blue', 'midnightblue']
+    alpha = [0.6, 1]
+    for i in range(2):
+        plt.bar(xitems, statlists[i], color=colrs[i], alpha = alpha[i], label = legend[i])
+    plt.legend()
+    if len(statlists) > 5: plt.xticks(rotation=45)
+
+def scenes_plot_conf(ax, xitems, statlist):
+    dupl_scenes = [x.split('\n')[1] for x in xitems]
+    scenes = []
+    for scene in dupl_scenes:
+        if scene not in scenes: scenes.append(scene)
+    numbars = int(len(xitems)/len(scenes))
+    statlists = [statlist[i::numbars] for i in range(len(scenes))]
+    legend = [xitems[i].split('\n')[0] for i in range(numbars)]
+    xitems = [scene[1:-1] for scene in scenes]
+    data = {legend[i]:statlists[i] for i in range(len(legend))}
+    bar_plot(ax, data)
+    plt.bar(xitems, len(xitems) * [0])
+    if len(statlists) > 5: plt.xticks(rotation=45)
+
+
+def visualize(title, xlabel, ylabel, xitems, savepath, statlist, plottype):
+    # Configure based on plot type
+    if plottype == "":
+        plot = plot_conf
+    elif plottype == "compare":
+        plot = comp_plot_conf
+    elif plottype == "scenes":
+        plot = scenes_plot_conf
+    fig = plt.figure(figsize=(5, 5))
+    ax = fig.subplots()
+    plot(ax, xitems, statlist)
+    # Meta
     plt.suptitle("\n".join(wrap(title, 55)), y=1)
     plt.ylabel(ylabel)
     plt.xlabel(xlabel)
-    if num_overlay > 1:
-        statlists = [statlist[i::num_overlay] for i in range(num_overlay)]
-        scenes = {x.split('\n')[1] for x in xitems}
-        legend = [xitems[i].split('\n')[0] for i in range(len(scenes))]
-        print(xitems)
-        print(legend)
-        xitems = [x.split('\n')[1][1:-1] for x in xitems[::num_overlay]]
-        colrs = ['tab:blue', 'midnightblue']
-        alpha = [0.6, 1]
-        for i in range(num_overlay):
-            plt.bar(xitems, statlists[i], color=colrs[i], alpha = alpha[i], label = legend[i])
-        plt.legend()
-    else: plt.bar(xitems, statlist)
-    if (len(statlist)/num_overlay) > 5: plt.xticks(rotation=45)
     plt.xticks(fontsize=8)
     plt.yticks(fontsize=8)
 
-def plot(title, xlabel, ylabel, xitems, savepath, statlist, num_overlay=1):
-    plot_conf(title, xlabel, ylabel, xitems, savepath, statlist, num_overlay)
-    plt.savefig(savepath, bbox_inches='tight', dpi=600)
-
-def show(title, xlabel, ylabel, xitems, savepath, statlist, num_overlay=1):
-    plot_conf(title, xlabel, ylabel, xitems, savepath, statlist, num_overlay)
-    plt.show()
-
-def debug(title, xlabel, ylabel, xitems, savepath, statlist, num_overlay=1):
-    plot_conf(title, xlabel, ylabel, xitems, savepath, statlist, num_overlay)
+# === MAIN FUNCTION ===
 
 def exec():
     # Format input params
@@ -229,7 +280,7 @@ def exec():
     print("\tType:", tp, stat)
 
     # Determine key (only needed for stat and dist and mem types)
-    num_overlay = 1
+    plottype = ""
     if tp == "stat" or tp == "dist":
         key = " - Intersects - "
         if "node" in stat:
@@ -240,11 +291,12 @@ def exec():
     elif "mem" in tp:
         if stat == "topology": key = " topology"
         else: key = " tree"
-        if tp == "memcomp": num_overlay = 2
+        if tp == "memcomp": plottype = "compare"
     elif tp == "accel":
         if "chunkfill" in stat: key = "Chunks - Fill %"
         elif stat == "chunks": key = "Chunks - # Total"
         elif stat == "duplprims": key = "Duplicate Primitives"
+    if len(scenes) > 1: plottype = "scenes"
 
     # Sort filelist alphabetically
     filelist = []
@@ -336,20 +388,20 @@ def exec():
         print("\tStats:\t", statlist)
         print("\tFiles:\t", filelist)
         print("\tAccels:\t", accellist)
+        visualize(title, xlabel, ylabel, xitems, savepath, statlist, plottype)
         if args.plot:
             print("\tPath:\t" + savepath)
-            plot(title, xlabel, ylabel, xitems, savepath, statlist, num_overlay)
-        if args.show:
-            show(title, xlabel, ylabel, xitems, savepath, statlist, num_overlay)
-        if args.debug:
-            debug(title, xlabel, ylabel, xitems, savepath, statlist, num_overlay)
+            plt.savefig(savepath, bbox_inches='tight', dpi=600)
+        if args.show: plt.show()
         print('\n')
 
 exec()
 
+# ==========
+
 ## System arguments format (in that order):
 ##   scene: crown, killeroo, etc.
-##   type: prof, time, stat:<name>, dist:<name>, mem[:<memtype>], accel:<acceldata>
+##   type: prof, time, stat:<name>, dist:<name>, <mem, memprof, memcomp>[:<memtype>], accel:<acceldata>,
 ##      name: primitive, chunk, leafnode, node
 ##      memtype: topology
 ##      acceldata: chunkfill, chunkfillmin, chunks, duplprims
