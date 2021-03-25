@@ -20,7 +20,7 @@ then
 fi
 
 if ! [[ $* == *--skip-render* ]]; then
-    cmake -S $SOURCE -B $BUILD -DCOUNT_STATS=True
+    cmake -S $SOURCE -B $BUILD
     make -C $BUILD -j
 
     SCENE_LIST=($(echo $SCENES | tr "," "\n"))
@@ -40,6 +40,4 @@ if ! [[ $* == *--skip-render* ]]; then
 fi
 
 PLOT="python3 $PYSCRIPTS/plot_data.py $SCENES"
-$PLOT dist:primimitive --plot
-$PLOT dist:leafnode --plot
-$PLOT dist:node --plot
+$PLOT prof --plot
