@@ -101,7 +101,7 @@ def get_info(scenes, accellist, filelist, tp, stat):
         test_name = test_name[:-len(test_name.split('_')[-1])].rstrip('_')
     fullsavepath.append(test_name)
     scenenames = ""
-    for scene in scenes: scenenames += scene + ':'
+    for scene in sorted(scenes): scenenames += scene + ':'
     fullsavepath.append(scenenames[:-1])
     savepath = test_type + tp
     if stat != "": savepath += '=' + stat
