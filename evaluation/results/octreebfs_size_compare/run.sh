@@ -8,7 +8,12 @@ RUN="./../../scripts/start_eval.sh $INTGR"
 SOURCE=../../..
 PYSCRIPTS=../../scripts/python-scripts
 BUILD=$SOURCE/build/Evaluation
-NPIXELSAMPLES=-n=1
+
+for arg in "$@"; do
+    if [[ $arg == "-n="* ]]; then
+        NPIXELSAMPLES=$arg
+    fi
+done
 
 if [ ! -d "output" ]
 then
@@ -28,11 +33,11 @@ if ! [[ $* == *--skip-render* ]]; then
             mkdir $SCENE
         fi
 
-        $RUN $SCENE $BUILD octree -n=1
-        $RUN $SCENE $BUILD octree-bfs -n=1
+        $RUN $SCENE $BUILD octree $NPIXELSAMPLES
+        $RUN $SCENE $BUILD octree-bfs $NPIXELSAMPLES
     done
 fi
 
 PLOT="python3 $PYSCRIPTS/plot_data.py $SCENES"
-$PLOT memcomp --plot
+$PLOT prof --plot
 $PLOT memcomp:topology --plot
