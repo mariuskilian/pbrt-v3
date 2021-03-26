@@ -28,8 +28,8 @@ if ! [[ $* == *--skip-render* ]]; then
             mkdir $SCENE
         fi
 
-        $RUN $SCENE $BUILD bvh $NPIXELSAMPLES
-        $RUN $SCENE $BUILD bvh-bfs $NPIXELSAMPLES
+        $RUN $SCENE $BUILD bvh -n=1
+        $RUN $SCENE $BUILD bvh-bfs -n=1
     done
 fi
 
