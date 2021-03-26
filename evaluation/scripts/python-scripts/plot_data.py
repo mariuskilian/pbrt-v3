@@ -236,16 +236,16 @@ def comp_plot_conf(ax, xitems, statlist):
     if len(statlists) > 5: plt.xticks(rotation=45)
 
 def scenes_plot_conf(ax, xitems, statlist):
-    dupl_scenes = [x.split('\n')[1] for x in xitems]
+    dupl_scenes = [x.split('\n')[1][1:-1] for x in xitems]
     scenes = []
     for scene in dupl_scenes:
         if scene not in scenes: scenes.append(scene)
-    numbars = int(len(xitems)/len(scenes))
+    numbars = int((len(xitems) + 1)/len(scenes))
     statlists = [statlist[i::numbars] for i in range(numbars)]
     legend = [xitems[i].split('\n')[0] for i in range(numbars)]
-    xitems = [scene[1:-1] for scene in scenes]
     data = {legend[i]:statlists[i] for i in range(len(legend))}
     bar_plot(ax, data)
+    xitems = [scene for scene in scenes]
     plt.bar(xitems, len(xitems) * [0])
     if len(scenes) > 5: plt.xticks(rotation=45)
 
