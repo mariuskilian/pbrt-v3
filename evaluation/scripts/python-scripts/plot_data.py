@@ -247,7 +247,6 @@ def scenes_plot_conf(ax, xitems, statlist):
     bar_plot(ax, data)
     xitems = [scene for scene in scenes]
     plt.bar(xitems, len(xitems) * [0])
-    if len(scenes) >= 5: plt.xticks(rotation=45)
 
 
 def visualize(title, xlabel, ylabel, xitems, savepath, statlist, plottype):
