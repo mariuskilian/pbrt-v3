@@ -108,6 +108,10 @@ def get_info(scenes, accellist, filelist, tp, stat):
 
     title = ""
 
+    if all("Octree" in accel for accel in accellist):
+        title += "Octree: "
+    if all("BVH" in accel and "Embree" not in accel for accel in accellist):
+        title += "BVH: "
     # x label / x items
     if all(accel == accellist[0] for accel in accellist):
         title += accellist[0] + ": "
@@ -130,8 +134,7 @@ def get_info(scenes, accellist, filelist, tp, stat):
             xlabel = sys.argv[3]
             xitems = [re.search(r"=?(\d.\d)", file)[1] for file in filelist]
     else:
-        if tp.endswith("comp") or len(scenes) > 1: xlabel = "Scene"
-        else: xlabel = "Acceleration Structure"
+        xlabel = "Acceleration Structure"
         xitems = accellist
     if len(scenes) > 1:
         xitems = [xitems[i] + "\n(" + filelist[i].split('/')[0].capitalize() + ')' for i in range(len(xitems))]
@@ -187,6 +190,8 @@ def get_info(scenes, accellist, filelist, tp, stat):
         else:
             title += " for different Scenes"
     title = re.sub(r"\s\([^()]*\)", "", title)
+    
+    if tp.endswith("comp") or len(scenes) > 1: xlabel = "Scene"
 
     savepath += '.pdf'
     fullsavepath.append(savepath)
