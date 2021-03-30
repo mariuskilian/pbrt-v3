@@ -167,14 +167,14 @@ def get_info(scenes, accellist, filelist, tp, stat):
             ylabel += stat.capitalize()
         ylabel += " (MiB)"
     if tp == "accel":
-        if stat == "chunks":
-            ylabel += "Total Number of Chunks"
-        elif stat == "chunkfill":
-            ylabel += "Average Chunk Fill Percentage (%)"
-        elif stat == "chunkfillmin":
-            ylabel += "Minimum Chunk Fill Percentage (%)"
-        elif stat == "duplprims":
-            ylabel += "Primitive Multiplication Factor"
+        if   "duplprim"     in stat: ylabel = "Primitive Multiplication Factor"
+        elif "primitive"    in stat: ylabel = "Number of Total Primitives"
+        elif "leafnode"     in stat: ylabel = "Number of Leaf Nodes"
+        elif "node"         in stat: ylabel = "Number of Total Nodes"
+        elif "chunkfillmin" in stat: ylabel = "Minimum Chunk Fill Percentage (%)"
+        elif "chunkfill"    in stat: ylabel = "Average Chunk Fill Percentage (%)"
+        elif "chunklayer"   in stat: ylabel = "Depth of Chunk Tree"
+        elif "chunk"        in stat: ylabel = "Total Number of Chunks"
 
     filler = " for each " if " per " in ylabel else " per "
     title += ylabel + filler + xlabel
@@ -300,9 +300,13 @@ def exec():
         else: key = " tree"
         if tp == "memcomp": plottype = "compare"
     elif tp == "accel":
-        if "chunkfill" in stat: key = "Chunks - Fill %"
-        elif stat == "chunks": key = "Chunks - # Total"
-        elif stat == "duplprims": key = "Duplicate Primitives"
+        if   "duplprim"     in stat: key = "Duplicate Primitives"
+        elif "primitive"    in stat: key = "Primitives - # Total"
+        elif "leafnode"     in stat: key = "Nodes - # Leaf"
+        elif "node"         in stat: key = "Nodes - # Total"
+        elif "chunkfill"    in stat: key = "Chunks - Fill %"
+        elif "chunklayer"   in stat: key = "Chunks - # Layers"
+        elif "chunk"        in stat: key = "Chunks - # Total"
     if len(scenes) > 1: plottype = "scenes"
 
     # Sort filelist alphabetically
