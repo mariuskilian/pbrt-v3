@@ -5,6 +5,7 @@ evaluation/plots
 evaluation/results/*/*
 !evaluation/results/*/run.sh
 evaluation/scripts/python-scripts/testcases
+evaluation/scripts/redo_all_plots.sh
 src/build
 src/bin
 src/objs
