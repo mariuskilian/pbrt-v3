@@ -21,10 +21,14 @@ def exec():
     rappy_path = os.path.dirname(os.path.realpath(__file__))
     os.chdir(rappy_path)
     os.chdir("../../results")
+    #print(tests)
     for test in tests:
         os.chdir(test)
+        print(os.getcwd())
         for scene in tests[test]:
-            os.system("./run.sh " + scene + " --skip-render")
+            print("./run.sh " + scene + " --skip-render")
+        print()
+            # os.system("./run.sh " + scene + " --skip-render")
         os.chdir("..")
 
 exec()
