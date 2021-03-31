@@ -18,13 +18,13 @@ def exec():
         tests[test] = test_scenes
     for test in tests.copy():
         if not tests[test]: del tests[test]
-    cwd = os.path.dirname(os.path.realpath(__file__))
-    os.system("cd " + cwd)
-    os.system("cd ../../results")
+    rappy_path = os.path.dirname(os.path.realpath(__file__))
+    os.chdir(rappy_path)
+    os.chdir("../../results")
     for test in tests:
-        os.system("cd " + test)
+        os.chdir(test)
         for scene in tests[test]:
             os.system("./run.sh " + scene + " --skip-render")
-        os.system("cd ..")
+        os.chdir("..")
 
 exec()
