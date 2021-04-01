@@ -35,7 +35,6 @@ if ! [[ $* == *--skip-render* ]]; then
 fi
 
 PLOT="python3 $PYSCRIPTS/plot_data.py $SCENES"
-$PLOT accel:duplprim --plot
 $PLOT accel:primitive --plot
 $PLOT accel:leafnode --plot
 $PLOT accel:node --plot
