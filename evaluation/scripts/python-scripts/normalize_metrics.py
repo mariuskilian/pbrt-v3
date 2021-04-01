@@ -33,7 +33,7 @@ def read_and_save_input(prefix):
             image = pyexr.open(filepath).get()
             maxvalue = max(maxvalue, np.max(image))
             images.append(image)
-            filepaths.append("images/" + file[:-3] + "png")
+            filepaths.append("output/" + file[:-3] + "png")
     # Sort by order described in order dictionary above
     filepaths, images = zip(*[[fp,img] for fp,img in sorted(zip(filepaths,images),
         key=lambda pair: order[pair[0].split(prefix)[-1].strip('-').split(".png")[0]])])
@@ -41,14 +41,14 @@ def read_and_save_input(prefix):
     images = list(images)
 
 def normalize_all():
-    global plots_path, images, filepaths, maxvalue
+    global images, filepaths, maxvalue
     for i in range(len(images)):
         images[i] /= maxvalue
         images[i] = np.where(images[i]<=0.0031308,12.92 * images[i], 1.055*(images[i]**(1/2.4)) - 0.055)
         viridis = cm.get_cmap('viridis', 255)
         images[i] = viridis(images[i][:,:,0])
         images[i] = (images[i] * 255).astype(np.uint8)
-        Image.fromarray(images[i]).save(plots_path + filepaths[i])
+        Image.fromarray(images[i]).save(filepaths[i])
 
 def determine_paths(scene):
     global plots_path
