@@ -2,7 +2,7 @@ set -e
 
 SCENE=$1
 
-INTGR="metric=primitives"
+INTGR="metric=leafnodes"
 SOURCE=../../..
 PYSCRIPTS=../../scripts/python-scripts
 BUILD=$SOURCE/build/Evaluation
@@ -28,7 +28,6 @@ if ! [[ $* == *--skip-render* ]]; then
     cmake -S $SOURCE -B $BUILD
     make -C $BUILD -j
 
-    $RUN "embree" $NPIXELSAMPLES
     $RUN "bvh" $NPIXELSAMPLES
     $RUN "bvh-bfs" $NPIXELSAMPLES
     $RUN "octree" $NPIXELSAMPLES
