@@ -582,7 +582,7 @@ float BVHChunkBFSAccel::IntersectMetric(const Ray &ray, metric m) const {
     SurfaceInteraction *isect = &_isect;
     Vector3f invDir(1 / ray.d.x, 1 / ray.d.y, 1 / ray.d.z);
     int dirIsNeg[3] = {invDir.x < 0, invDir.y < 0, invDir.z < 0};
-    if (!WorldBound().IntersectP(ray, invDir, dirIsNeg)) return false;
+    if (!WorldBound().IntersectP(ray, invDir, dirIsNeg)) return 0;
     bool hit = false;
     // Follow ray through BVH nodes to find primitive intersections
     #if defined(REL_KEYS)
@@ -712,7 +712,7 @@ float BVHChunkBFSAccel::IntersectMetric(const Ray &ray, metric m) const {
                 uint32_t prim_end = current_chunk->primitive_offset + sizes[sizes_idx];
                 for (uint32_t i = prim_start; i < prim_end; i++)
                     if (primitives[i].get()->Intersect(ray, isect)) hit = true;
-                if (m == metric::PRIMITIVES) metric_cnt += prim_end = prim_start;
+                if (m == metric::PRIMITIVES) metric_cnt += prim_end - prim_start;
                 if (node_stack_offset == 0) break;
                 current_node = node_stack[--node_stack_offset];
             }
