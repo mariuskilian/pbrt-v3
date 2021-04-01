@@ -50,9 +50,9 @@ def normalize_all():
         images[i] = (images[i] * 255).astype(np.uint8)
         Image.fromarray(images[i]).save(plots_path + filepaths[i])
 
-def make_plot(prefix, scene):
+def determine_paths(scene):
     global plots_path
-    fullsavepath = [sys.argv[0].rstrip("normalize_metrics.py") + "../../plots/"]
+    fullsavepath = [sys.argv[0].rstrip("normalize_metrics.py") + "../../plots"]
     fullsavepath.append("visualizations")
     fullsavepath.append(scene)
     test_name = str(os.getcwd()).split('/')[-1][4:]
@@ -63,7 +63,9 @@ def make_plot(prefix, scene):
     if not os.path.exists(savepath + "images"): os.mkdir(savepath + "images")
     plots_path = savepath
     savepath += test_name + ".pdf"
+    return savepath
 
+def make_plot(prefix, scene, savepath):
     fig, axes = plt.subplots(nrows=1, ncols=len(images), figsize=(3*(len(images) + 1), 5))
     # Set Figure title
     t = prefix.split('=')[-1].split('-')[0]
@@ -71,7 +73,7 @@ def make_plot(prefix, scene):
     if t == "primitives": title += "Primitives"
     elif t == "nodes": title += "Nodes"
     elif t == "leafnodes": title += "Leaf Nodes"
-    title += " Intersected per Pixel"
+    title += " Intersected per Pixel for Scene \"" + scene.capitalize() + "\""
     fig.suptitle(title, fontsize=16)
     # add images to subplot
     for i in range(len(axes.flat)):
@@ -101,8 +103,9 @@ def exec():
     scene = str(sys.argv[1])
     integrator = str(sys.argv[2])
     prefix = scene + '-' + integrator
+    savepath = determine_paths(scene)
     read_and_save_input(prefix)
     normalize_all()
-    make_plot(prefix, scene)
+    make_plot(prefix, scene, savepath)
 
 exec()
