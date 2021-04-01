@@ -16,6 +16,7 @@ import matplotlib.image as mpimg
 # imag = (imag * 255).astype(np.uint8)
 # Image.fromarray(imag).save("crown_3.png")
 
+plots_path = ""
 images = []
 filepaths = []
 maxvalue = 0
@@ -23,7 +24,7 @@ maxvalue = 0
 order={"embree":0, "bvh":10, "bvh-bfs":20, "kdtree":30, "octree":40, "octree-bfs":50}
 
 def read_and_save_input(prefix):
-    global images, filepaths, maxvalue
+    global plots_path, images, filepaths, maxvalue
     # Prep variable
     filelist = os.listdir("output")
     for file in filelist:
@@ -32,8 +33,7 @@ def read_and_save_input(prefix):
             image = pyexr.open(filepath).get()
             maxvalue = max(maxvalue, np.max(image))
             images.append(image)
-            fp = filepath.split("/")
-            filepaths.append(fp[0] + "/nrm_" + fp[1][:-3] + "png")
+            filepaths.append("images/" + file[:-3] + "png")
     # Sort by order described in order dictionary above
     filepaths, images = zip(*[[fp,img] for fp,img in sorted(zip(filepaths,images),
         key=lambda pair: order[pair[0].split(prefix)[-1].strip('-').split(".png")[0]])])
@@ -41,16 +41,29 @@ def read_and_save_input(prefix):
     images = list(images)
 
 def normalize_all():
-    global images, filepaths, maxvalue
+    global plots_path, images, filepaths, maxvalue
     for i in range(len(images)):
         images[i] /= maxvalue
         images[i] = np.where(images[i]<=0.0031308,12.92 * images[i], 1.055*(images[i]**(1/2.4)) - 0.055)
         viridis = cm.get_cmap('viridis', 255)
         images[i] = viridis(images[i][:,:,0])
         images[i] = (images[i] * 255).astype(np.uint8)
-        Image.fromarray(images[i]).save(filepaths[i])
+        Image.fromarray(images[i]).save(plots_path + filepaths[i])
 
-def make_plot(prefix):
+def make_plot(prefix, scene):
+    global plots_path
+    fullsavepath = [sys.argv[0].rstrip("normalize_metrics.py") + "../../plots/"]
+    fullsavepath.append("visualizations")
+    fullsavepath.append(scene)
+    test_name = str(os.getcwd()).split('/')[-1][4:]
+    savepath = ""
+    for path in fullsavepath:
+        savepath += path + "/"
+        if not os.path.exists(savepath): os.mkdir(savepath)
+    if not os.path.exists(savepath + "images"): os.mkdir(savepath + "images")
+    plots_path = savepath
+    savepath += test_name + ".pdf"
+
     fig, axes = plt.subplots(nrows=1, ncols=len(images), figsize=(3*(len(images) + 1), 5))
     # Set Figure title
     t = prefix.split('=')[-1].split('-')[0]
@@ -67,10 +80,10 @@ def make_plot(prefix):
         im = ax.imshow(images[i], cmap='viridis',
                     vmin=0, vmax=maxvalue)
         t = filepaths[i].split("/")[-1].split(prefix + '-')[-1].split(".png")[0]
-        if t == "bvh": title = "Original BVH"
-        elif t == "octree": title = "Original Octree"
-        elif t == "bvh-bfs": title = "Compressed BVH"
-        elif t == "octree-bfs": title = "Compressed Octree"
+        if t == "bvh": title = "Basic BVH"
+        elif t == "octree": title = "Basic Octree"
+        elif t == "bvh-bfs": title = "Quantized BVH"
+        elif t == "octree-bfs": title = "1-Bit Octree"
         elif t == "embree": title = "Embree BVH"
         ax.title.set_text(title)
     # Adjust subplot dimensions etc.
@@ -81,15 +94,15 @@ def make_plot(prefix):
     fig.colorbar(im, cax=cb_ax)
     # cbar.set_ticks(np.arange(0,int(maxvalue),int(maxvalue/4)))
     # save plot
-    savepath = sys.argv[0].rsplit('normalize_metrics.py') + "/../../plots/"
-    savepath += filepaths[0].split("/nrm_")[0] + "/plot_" + prefix + ".pdf"
     plt.savefig(savepath, bbox_inches='tight', dpi=600)
         
 
 def exec():
-    prefix = str(sys.argv[1])
+    scene = str(sys.argv[1])
+    integrator = str(sys.argv[2])
+    prefix = scene + '-' + integrator
     read_and_save_input(prefix)
     normalize_all()
-    make_plot(prefix)
+    make_plot(prefix, scene)
 
 exec()
