@@ -60,7 +60,6 @@ def determine_paths(scene):
     for path in fullsavepath:
         savepath += path + "/"
         if not os.path.exists(savepath): os.mkdir(savepath)
-    if not os.path.exists(savepath + "images"): os.mkdir(savepath + "images")
     plots_path = savepath
     savepath += test_name + ".pdf"
     return savepath
