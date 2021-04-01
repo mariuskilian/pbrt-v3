@@ -116,10 +116,6 @@ def get_info(scenes, accellist, filelist, tp, stat):
 
     title = ""
 
-    if all("Octree" in accel for accel in accellist):
-        title += "Octree: "
-    if all("BVH" in accel and "Embree" not in accel for accel in accellist):
-        title += "BVH: "
     # x label / x items
     if all(accel == accellist[0] for accel in accellist):
         title += accellist[0] + ": "
@@ -142,6 +138,11 @@ def get_info(scenes, accellist, filelist, tp, stat):
             xlabel = "Acceleration Structure"
             xitems = accellist
     else:
+        if all("Octree" in accel for accel in accellist):
+            title += "Octree: "
+        if all("BVH" in accel and "Embree" not in accel for accel in accellist):
+            title += "BVH: "
+
         xlabel = "Acceleration Structure"
         xitems = accellist
     if len(scenes) > 1:
