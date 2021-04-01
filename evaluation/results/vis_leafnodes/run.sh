@@ -6,7 +6,7 @@ INTGR="metric=leafnodes"
 SOURCE=../../..
 PYSCRIPTS=../../scripts/python-scripts
 BUILD=$SOURCE/build/Evaluation
-RUN="./../../scripts/start_eval.sh $INTGR $SCENE $BUILD"
+RUN="./../../scripts/start_eval.sh $INTGR"
 
 NPIXELSAMPLES="-n=1"
 
@@ -30,9 +30,9 @@ if ! [[ $* == *--skip-render* ]]; then
         cmake -S $SOURCE -B $BUILD
         make -C $BUILD -j
 
-        $RUN bvh $NPIXELSAMPLES
-        $RUN bvh-bfs $NPIXELSAMPLES
-        $RUN octree $NPIXELSAMPLES
+        $RUN $SCENE $BUILD bvh $NPIXELSAMPLES
+        $RUN $SCENE $BUILD bvh-bfs $NPIXELSAMPLES
+        $RUN $SCENE $BUILD octree $NPIXELSAMPLES
     done
 fi
 
