@@ -6,7 +6,7 @@ INTGR="metric=nodes"
 SOURCE=../../..
 PYSCRIPTS=../../scripts/python-scripts
 BUILD=$SOURCE/build/Evaluation
-RUN="./../../scripts/start_eval.sh $INTGR $SCENE $BUILD"
+RUN="./../../scripts/start_eval.sh $INTGR"
 
 NPIXELSAMPLES="-n=1"
 
