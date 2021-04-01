@@ -139,8 +139,8 @@ def get_info(scenes, accellist, filelist, tp, stat):
             xlabel = "Bitfield Data Type"
             xitems = ["uint" + str(int(re.search(r"BF_SIZE=(\d+)", file)[1])) for file in filelist]
         else:
-            xlabel = sys.argv[3]
-            xitems = [re.search(r"=?(\d.\d)", file)[1] for file in filelist]
+            xlabel = "Acceleration Structure"
+            xitems = accellist
     else:
         xlabel = "Acceleration Structure"
         xitems = accellist
