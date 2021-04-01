@@ -73,20 +73,28 @@ def get_accelInfo(path, key, stat):
     with open(path) as f:
         for line in f:
             if key in line:
-                if stat == "duplprims":
+                if   "duplprim"     in stat:
                     # Duplicate Primitives                          11891548 /      3540215 (3.36x)
                     m = re.search(r"\s*\d+\s*/\s*\d+\s*\((\d+\.\d*)x\)", line)
                     return float(m[1])
-                elif stat == "chunks":
+                elif "primitive" in stat or "leafnode" in stat or "node" in stat or "chunklayer" in stat:
+                    # Primitives - # Total                                         11891548
+                    # Nodes - # Leaf                                                 769455
+                    # Nodes - # Total (incl. implicit root node)                     879377
+                    # Chunks - # Layers (excl. root chunk)                                6
+                    m = re.search(r"(\d+)", line)
+                    return int(m[1])
+                elif stat == "chunk":
                     # Chunks - # Total                                                43523
                     m = re.search(r"Total\s*(\d+)", line)
                     return int(m[1])
-                elif "chunkfill" in stat:
+                elif "chunk" in stat:
                     # Chunks - Fill %                                                 31.570 avg [range 12.500000 - 100.000000]
                     m = re.search(r"\s*(\d+\.\d*)\s*avg\s*\[range\s*(\d+\.\d*)\s*-\s*(\d+\.\d*)", line)
                     if stat == "chunkfill": return float(m[1])
                     elif stat == "chunkfillmin": return float(m[2])
                     elif stat == "chunkfillmax": return float(m[3])
+                
 
 # =========
 
