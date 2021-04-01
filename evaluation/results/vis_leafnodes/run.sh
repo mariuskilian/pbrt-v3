@@ -38,5 +38,6 @@ fi
 
 SCENE_LIST=($(echo $SCENES | tr "," "\n"))
 for i in $(seq 0 1 $((${#SCENE_LIST[@]} - 1))); do
+    SCENE=${SCENE_LIST[$i]}
     python3 $PYSCRIPTS/normalize_metrics.py $SCENE $INTGR
 done
