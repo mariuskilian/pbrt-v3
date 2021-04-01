@@ -30,9 +30,9 @@ if ! [[ $* == *--skip-render* ]]; then
         cmake -S $SOURCE -B $BUILD
         make -C $BUILD -j
 
-        $RUN "bvh" $NPIXELSAMPLES
-        $RUN "bvh-bfs" $NPIXELSAMPLES
-        $RUN "octree" $NPIXELSAMPLES
+        $RUN bvh $NPIXELSAMPLES
+        $RUN bvh-bfs $NPIXELSAMPLES
+        $RUN octree $NPIXELSAMPLES
     done
 fi
 
