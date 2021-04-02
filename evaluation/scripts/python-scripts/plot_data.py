@@ -362,21 +362,7 @@ def exec():
                 statlist.append(None)
             else:
                 statlist.append(1000 * 1000 * time / nIsects)
-        elif tp == "stat":
-            if stat == "chunkfill":
-                numnodes = get_accelInfo(fp, "Nodes - # Total", "node")
-                numchunks = get_accelInfo(fp, "Chunks - # Total", "chunk")
-                chunksize = get_accelInfo(fp, "CHUNK_SIZE=", "")
-                accel = get_accelInfo(fp, "Chosen Accelerator: ", "")
-                if accel == "BVH":
-                    chunksize = max(chunksize, 64)
-                    numnodesperchunk = 8 * (chunksize - 40)
-                if accel == "Octree":
-                    numnodesperchunk = 8 * (chunksize - 8)
-                avgchunkfill = 100 * numnodes / (numchunks * numnodesperchunk)
-                statlist.append(avgchunkfill)
-            else:
-                statlist.append(get_stat(fp, key))
+        elif tp == "stat": statlist.append(get_stat(fp, key))
         elif tp == "dist":
             # value = get_dist(fp, key) messed up through instancing!!
             value = get_stat(fp, key)
@@ -397,8 +383,21 @@ def exec():
                 else: statlist.append(mem * get_prof(fp, "Accelerator::Intersect()"))
             else: statlist.append(mem)
         elif tp == "accel":
-            accelinfo = get_accelInfo(fp, key, stat)
-            statlist.append(accelinfo)
+            if stat == "chunkfill":
+                numnodes = get_accelInfo(fp, "Nodes - # Total", "node")
+                numchunks = get_accelInfo(fp, "Chunks - # Total", "chunk")
+                chunksize = get_accelInfo(fp, "CHUNK_SIZE=", "")
+                accel = get_accelInfo(fp, "Chosen Accelerator: ", "")
+                if accel == "BVH":
+                    chunksize = max(chunksize, 64)
+                    numnodesperchunk = 8 * (chunksize - 40)
+                if accel == "Octree":
+                    numnodesperchunk = 8 * (chunksize - 8)
+                avgchunkfill = 100 * numnodes / (numchunks * numnodesperchunk)
+                statlist.append(avgchunkfill)
+            else:
+                accelinfo = get_accelInfo(fp, key, stat)
+                statlist.append(accelinfo)
 
     title, xlabel, ylabel, xitems, fullsavepath = get_info(scenes, accellist, filelist, tp, stat)
     savepath = ""
