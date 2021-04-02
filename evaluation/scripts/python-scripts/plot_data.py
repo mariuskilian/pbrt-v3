@@ -35,6 +35,23 @@ def get_prof(path, key):
                 m = re.search(r"\(\s*(\d*):(\d*):(\d*).(\d*)\)", line)
                 return 60 * 60 * int(m[1]) + 60 * int(m[2]) + int(m[3]) + int(m[4]) / 100
 
+def get_totalProf(path, key):
+    with open(path) as f:
+        # Skip to Profile (flattened) section in file
+        for line in f:
+            if "Profile" in line:
+                break
+        # Find line with specified key
+        time = 0
+        num_stats = 0
+        for line in f:
+            if key in line:
+                # find & convert (   0:00:00.00) substring to seconds
+                m = re.search(r"\(\s*(\d*):(\d*):(\d*).(\d*)\)", line)
+                time += 60 * 60 * int(m[1]) + 60 * int(m[2]) + int(m[3]) + int(m[4]) / 100
+                num_stats += 1
+            if num_stats == 2: return time
+
 def get_mem(path, key):
     with open(path) as f:
         for line in f:
@@ -157,7 +174,10 @@ def get_info(scenes, accellist, filelist, tp, stat):
     # y label
     ylabel = ""
     # Time
-    if tp == "prof" or tp == "time": ylabel += "Intersection Time per Ray (μs)"
+    if tp == "prof" or tp == "time":
+        if stat == "total": ylabel += "Intersection "
+        else: ylabel += "Traversal "
+        ylabel += "Time per Ray (μs)"
     # Stats
     if tp == "dist": ylabel += "Average "
     if tp == "stat" or tp  == "dist":
@@ -356,12 +376,18 @@ def exec():
     for i in range(len(filelist)):
         fp = filelist[i] #filepath
         if tp == "prof":
-            time = get_prof(fp, "Accelerator::Intersect()")
+            if stat == "total":
+                time = get_totalProf(fp, "Accelerator::Intersect()")
+            else:
+                time = get_prof(fp, "Accelerator::Intersect()")
             nIsects = get_nIsects(fp)
             if time == None or nIsects == None:
                 statlist.append(None)
             else:
-                statlist.append(1000 * 1000 * time / nIsects)
+                if time == "total":
+                    statlist.append(1000 * 1000 * time / nIsects)
+                else:
+                    statlist.append(1000 * 1000 * time / nIsects)
         elif tp == "stat": statlist.append(get_stat(fp, key))
         elif tp == "dist":
             # value = get_dist(fp, key) messed up through instancing!!

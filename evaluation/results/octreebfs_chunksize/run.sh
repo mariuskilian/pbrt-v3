@@ -69,6 +69,7 @@ python3 $PYSCRIPTS/normalize_filename_num_digits.py $SCENES
 #Scripts to have plot show all scenes at once should go here
 PLOT_DATA="python3 $PYSCRIPTS/plot_data.py $SCENES"
 $PLOT_DATA prof --plot
+$PLOT_DATA prof:total --plot
 $PLOT_DATA mem:topology --plot
 $PLOT_DATA accel:chunkfill --plot
 $PLOT_DATA accel:chunks --plot

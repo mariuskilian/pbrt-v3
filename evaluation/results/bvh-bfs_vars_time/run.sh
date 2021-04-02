@@ -46,3 +46,4 @@ if ! [[ $* == *--skip-render* ]]; then
 fi
 
 python3 $PYSCRIPTS/plot_data.py $SCENES prof --plot
+python3 $PYSCRIPTS/plot_data.py $SCENES prof:total --plot

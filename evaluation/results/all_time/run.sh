@@ -41,3 +41,4 @@ fi
 
 PLOT="python3 $PYSCRIPTS/plot_data.py $SCENES"
 $PLOT prof --plot
+$PLOT prof:total --plot

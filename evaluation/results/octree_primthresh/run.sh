@@ -41,4 +41,5 @@ fi
 
 python3 $PYSCRIPTS/normalize_filename_num_digits.py $SCENE
 python3 $PYSCRIPTS/plot_data.py $SCENE prof --plot
+python3 $PYSCRIPTS/plot_data.py $SCENE prof:total --plot
 python3 $PYSCRIPTS/plot_data.py $SCENE mem:topology --plot
