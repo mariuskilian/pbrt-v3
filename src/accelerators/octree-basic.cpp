@@ -59,9 +59,6 @@ STAT_INT_DISTRIBUTION("Octree - Intersects - Node - Leaf/Distribution", octree_d
 
 STAT_COUNTER("Octree - Intersects - Node - Total/Total #", octree_stat_nodeIntersectsTotal);
 STAT_INT_DISTRIBUTION("Octree - Intersects - Node - Total/Distribution", octree_dist_nodeIntersects);
-
-STAT_COUNTER("Octree - Intersects - Chunk/Total #", octree_stat_chunkIntersectsTotal);
-STAT_INT_DISTRIBUTION("Octree - Intersects - Chunk/Distribution", octree_dist_chunkIntersects);
 #endif
 
 // === HELPERS ===

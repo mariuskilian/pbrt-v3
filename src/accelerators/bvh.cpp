@@ -59,9 +59,6 @@ STAT_INT_DISTRIBUTION("BVH - Intersects - Node - Leaf/Distribution", bvh_dist_le
 
 STAT_COUNTER("BVH - Intersects - Node - Total/Total #", bvh_stat_nodeIntersectsTotal);
 STAT_INT_DISTRIBUTION("BVH - Intersects - Node - Total/Distribution", bvh_dist_nodeIntersects);
-
-STAT_COUNTER("BVH - Intersects - Chunk/Total #", bvh_stat_chunkIntersectsTotal);
-STAT_INT_DISTRIBUTION("BVH - Intersects - Chunk/Distribution", bvh_dist_chunkIntersects);
 #endif
 
 // BVHAccel Local Declarations

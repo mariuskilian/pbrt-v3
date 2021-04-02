@@ -88,12 +88,18 @@ def get_accelInfo(path, key, stat):
                     # Chunks - # Total                                                43523
                     m = re.search(r"Total\s*(\d+)", line)
                     return int(m[1])
-                elif "chunk" in stat:
+                elif "chunkfill" in stat:
                     # Chunks - Fill %                                                 31.570 avg [range 12.500000 - 100.000000]
                     m = re.search(r"\s*(\d+\.\d*)\s*avg\s*\[range\s*(\d+\.\d*)\s*-\s*(\d+\.\d*)", line)
                     if stat == "chunkfill": return float(m[1])
                     elif stat == "chunkfillmin": return float(m[2])
                     elif stat == "chunkfillmax": return float(m[3])
+                elif key == "CHUNK_SIZE=":
+                    m = re.search(r"CHUNK_SIZE=(\d+)", line)
+                    return int(m[1])
+                elif key == "Chosen Accelerator: ":
+                    m = re.search(r"(BVH|Octree)", line)
+                    return m[1]
                 
 
 # =========
@@ -356,11 +362,28 @@ def exec():
                 statlist.append(None)
             else:
                 statlist.append(1000 * 1000 * time / nIsects)
-        elif tp == "stat": statlist.append(get_stat(fp, key))
+        elif tp == "stat":
+            if stat == "chunkfill":
+                numnodes = get_accelInfo(fp, "Nodes - # Total", "node")
+                numchunks = get_accelInfo(fp, "Chunks - # Total", "chunk")
+                chunksize = get_accelInfo(fp, "CHUNK_SIZE=", "")
+                accel = get_accelInfo(fp, "Chosen Accelerator: ", "")
+                if accel == "BVH":
+                    chunksize = max(chunksize, 64)
+                    numnodesperchunk = 8 * (chunksize - 40)
+                if accel == "Octree":
+                    numnodesperchunk = 8 * (chunksize - 8)
+                avgchunkfill = 100 * numnodes / (numchunks * numnodesperchunk)
+                statlist.append(avgchunkfill)
+            else:
+                statlist.append(get_stat(fp, key))
         elif tp == "dist":
-            value = get_dist(fp, key)
+            # value = get_dist(fp, key) messed up through instancing!!
+            value = get_stat(fp, key)
             if value == None: statlist.append(None)
-            else: statlist.append(value[0])
+            else:
+                numRays = get_nIsects(fp)
+                statlist.append(value / numRays)
         elif "mem" in tp:
             fullkey = ""
             if accellist[i] == OCTREEBFS: fullkey += "Octree-BFS"
