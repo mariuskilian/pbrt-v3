@@ -101,10 +101,19 @@ def make_plot(prefix, scene, savepath):
 def exec():
     scene = str(sys.argv[1])
     integrator = str(sys.argv[2])
+
+    print("\nplot_data.py:\n\tProcessing scenes: ", scene)
+    print("\tType:", integrator.split('=')[1])
+
     prefix = scene + '-' + integrator
     savepath = determine_paths(scene)
+    print("\tPath:", savepath)
+    print("Converting Images to PNG...")
     read_and_save_input(prefix)
+    print("Normalizing and Colormapping Images...")
     normalize_all()
+    print("Creating Plot...")
     make_plot(prefix, scene, savepath)
+    print("Done!\n")
 
 exec()
