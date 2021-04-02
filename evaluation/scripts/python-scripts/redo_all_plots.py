@@ -21,7 +21,7 @@ def exec():
         if not tests[test]: del tests[test]
     rappy_path = os.path.dirname(os.path.realpath(__file__))
     os.chdir(rappy_path)
-    with open(cfd + "../redo_all_plots.sh", 'w') as f:
+    with open("../redo_all_plots.sh", 'w') as f:
         f.write("DIR=\"$( cd \"$( dirname \"${BASH_SOURCE[0]}\" )\" &> /dev/null && pwd )\"\n")
         f.write("cd $DIR/../results\n")
         for test in tests:
