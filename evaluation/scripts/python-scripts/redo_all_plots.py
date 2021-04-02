@@ -12,7 +12,7 @@ def exec():
         test_scenes = []
         for scene in os.listdir(plots_path + test):
             if not os.path.isdir(plots_path + test + '/' + scene): continue
-            if not re.match(r"((crown|measure-one|villa|hair|landscape|ecosys):)*(crown|measure-one|villa|hair|landscape|ecosys)", scene):
+            if not re.fullmatch(r"((crown|measure-one|villa|hair|landscape|ecosys):)*(crown|measure-one|villa|hair|landscape|ecosys)", scene):
                 continue
             test_scenes.append(scene.replace(':', ','))
         tests[test] = test_scenes
