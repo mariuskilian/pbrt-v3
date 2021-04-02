@@ -84,7 +84,7 @@ def get_accelInfo(path, key, stat):
                     # Chunks - # Layers (excl. root chunk)                                6
                     m = re.search(r"(\d+)", line)
                     return int(m[1])
-                elif stat == "chunk":
+                elif stat == "chunk" or stat == "chunks":
                     # Chunks - # Total                                                43523
                     m = re.search(r"Total\s*(\d+)", line)
                     return int(m[1])
