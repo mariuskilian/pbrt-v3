@@ -102,7 +102,7 @@ def exec():
     scene = str(sys.argv[1])
     integrator = str(sys.argv[2])
 
-    print("\nplot_data.py:\n\tProcessing scenes: ", scene)
+    print("\nnormalize_metrics.py:\n\tScene: ", scene)
     print("\tType:", integrator.split('=')[1])
 
     prefix = scene + '-' + integrator
