@@ -32,8 +32,7 @@ for i in $(seq 0 1 $((${#SCENE_LIST[@]} - 1))); do
         mkdir $SCENE
     fi
 
-    $RUN $SCENE $BUILD bvh $NPIXELSAMPLES
-    $RUN $SCENE $BUILD bvh-bfs $NPIXELSAMPLES
+    $RUN $SCENE $BUILD embree $NPIXELSAMPLES
 done
 
 PLOT="python3 $PYSCRIPTS/plot_data.py $SCENES"
