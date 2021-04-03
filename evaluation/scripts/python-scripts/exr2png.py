@@ -3,6 +3,7 @@ import sys
 import pyexr
 import numpy as np
 from PIL import Image
+import re
         
 def exec():
     filepaths = []
@@ -19,7 +20,8 @@ def exec():
             images.append(image)
             maxvalues.append(np.max(image))
             filepaths.append(filepath)
-            savepaths.append(savepath + file[:-3] + "png")
+            scenename = re.match(r".*(crown|measure-one|villa|killeroo|hair|ecosys|landscape).*", file)
+            savepaths.append(savepath + scenename + ".png")
     for i in range(len(images)):
         #images[i] *= 16 / maxvalues[i]
         images[i] = np.where(images[i]<=0.0031308,12.92 * images[i], 1.055*(images[i]**(1/2.4)) - 0.055)
