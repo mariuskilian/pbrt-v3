@@ -43,7 +43,7 @@ def normalize_all():
         images[i] = (images[i] * 255).astype(np.uint8)
         #Image.fromarray(images[i]).save(filepaths[i])
 
-def determine_paths(scene, notitle=False, shorttile=False):
+def determine_paths(scene, notitle=False, shorttitle=False):
     global plots_path
     fullsavepath = [sys.argv[0].rstrip("normalize_metrics.py") + "../../plots"]
     fullsavepath.append("visualizations")
