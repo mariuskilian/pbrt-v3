@@ -7,6 +7,7 @@ from matplotlib import cm
 import matplotlib.pyplot as plt
 import matplotlib.gridspec as gridspec
 import matplotlib.image as mpimg
+import argparse
 
 # imag = pyexr.open("crown.exr").get()
 # imag /= np.max(imag)
@@ -64,7 +65,7 @@ def determine_paths(scene):
     savepath += test_name + ".pdf"
     return savepath
 
-def make_plot(prefix, scene, savepath):
+def make_plot(prefix, scene, savepath, notitle=False, shorttitle=False):
     fig, axes = plt.subplots(nrows=1, ncols=len(images), figsize=(3*(len(images) + 1), 5))
     # Set Figure title
     t = prefix.split('=')[-1].split('-')[0]
@@ -72,8 +73,12 @@ def make_plot(prefix, scene, savepath):
     if t == "primitives": title += "Primitives"
     elif t == "nodes": title += "Nodes"
     elif t == "leafnodes": title += "Leaf Nodes"
-    title += " Intersected per Pixel for Scene \"" + scene.capitalize() + "\""
-    fig.suptitle(title, fontsize=16)
+    title += " Intersected per Pixel for "
+    if shorttitle:
+        title += "different Scenes"
+    else:
+        title += "Scene \"" + scene.capitalize() + "\""
+    if not notitle: fig.suptitle(title, fontsize=16)
     # add images to subplot
     for i in range(len(axes.flat)):
         ax = axes.flat[i]
@@ -86,7 +91,7 @@ def make_plot(prefix, scene, savepath):
         elif t == "bvh-bfs": title = "Quantized BVH"
         elif t == "octree-bfs": title = "1-Bit Octree"
         elif t == "embree": title = "Embree BVH"
-        ax.title.set_text(title)
+        if not notitle: ax.title.set_text(title)
     # Adjust subplot dimensions etc.
     fig.subplots_adjust(bottom=0.1, top=0.9, left=0.1, right=0.8,
                         wspace=0.02, hspace=0.02)
@@ -99,6 +104,11 @@ def make_plot(prefix, scene, savepath):
         
 
 def exec():
+    parser = argparse.ArgumentParser(description="Process render data from pbrt")
+    parser.add_argument("--notitle", action='store_true', default=False)
+    parser.add_argument("--shorttitle", action='store_true', default=False)
+    args, _ = parser.parse_known_args()
+
     scene = str(sys.argv[1])
     integrator = str(sys.argv[2])
 
@@ -113,7 +123,7 @@ def exec():
     print("Normalizing and Colormapping Images...")
     normalize_all()
     print("Creating Plot...")
-    make_plot(prefix, scene, savepath)
+    make_plot(prefix, scene, savepath, args.notitle, args.shorttitle)
     print("Done!\n")
 
 exec()
