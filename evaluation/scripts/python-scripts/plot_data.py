@@ -366,7 +366,9 @@ def exec():
                     if "-bfs" in file: accellist.append(OCTREEBFS)
                     else: accellist.append(OCTREE)
     if all(accel == accellist[0] for accel in accellist):
-        filelist.sort()
+        def sort(file):
+            return (sceneorder[file.split('/')[0].capitalize()], file.split('/')[1])
+        filelist.sort(key = lambda f: sort(f))
     else:
         def sort(pair):
             return (sceneorder[pair[0].split('/')[0].capitalize()], order[pair[1]])
