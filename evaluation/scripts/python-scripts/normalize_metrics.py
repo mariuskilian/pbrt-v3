@@ -114,7 +114,9 @@ def exec():
 
     scene = str(sys.argv[1])
     integrator = str(sys.argv[2])
-    if len(sys.argv) > 3: accels = str(sys.argv[3]).split(',')
+    if len(sys.argv) > 3:
+        accels = str(sys.argv[3]).split(',')
+        if accels[0] == "all": accels = None
     else: accels = None
 
     print("\nnormalize_metrics.py:\n\tScene: ", scene)
