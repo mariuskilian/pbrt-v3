@@ -1,6 +1,5 @@
 import os
 import sys
-import imageio
 import pyexr
 import numpy as np
 from PIL import Image

@@ -20,20 +20,23 @@ then
     mkdir output
 fi
 
-COUNT_STATS="-DCOUNT_STATS=False" # Because we want to compare time
-cmake -S $SOURCE -B $BUILD
-make -C $BUILD -j
+if ! [[ $* == *--skip-render* ]]; then
 
-SCENE_LIST=($(echo $SCENES | tr "," "\n"))
-for i in $(seq 0 1 $((${#SCENE_LIST[@]} - 1))); do
-    SCENE=${SCENE_LIST[$i]}
+    COUNT_STATS="-DCOUNT_STATS=False" # Because we want to compare time
+    cmake -S $SOURCE -B $BUILD
+    make -C $BUILD -j
 
-    if [ ! -d $SCENE ]; then
-        mkdir $SCENE
-    fi
+    SCENE_LIST=($(echo $SCENES | tr "," "\n"))
+    for i in $(seq 0 1 $((${#SCENE_LIST[@]} - 1))); do
+        SCENE=${SCENE_LIST[$i]}
 
-    $RUN $SCENE $BUILD embree $NPIXELSAMPLES
-done
+        if [ ! -d $SCENE ]; then
+            mkdir $SCENE
+        fi
+
+        $RUN $SCENE $BUILD embree $NPIXELSAMPLES
+    done
+fi
 
 PLOT="python3 $PYSCRIPTS/plot_data.py $SCENES"
 python3 ../../scripts/python-scripts/exr2png.py
