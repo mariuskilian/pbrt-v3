@@ -16,12 +16,19 @@ maxvalue = 0
 
 order={"embree":0, "bvh":10, "bvh-bfs":20, "kdtree":30, "octree":40, "octree-bfs":50}
 
-def read_and_save_input(prefix):
+def read_and_save_input(prefix, accels):
     global plots_path, images, filepaths, maxvalue
     # Prep variable
     filelist = os.listdir("output")
     for file in filelist:
-        if file.endswith(".exr") and file.startswith(prefix):
+        iswantedaccel = False
+        if accels == None: iswantedaccel = True
+        else:
+            for accel in accels:
+                if accel == file.split(prefix)[1:-4]:
+                    iswantedaccel = True
+                    break
+        if iswantedaccel and file.endswith(".exr") and file.startswith(prefix):
             filepath = os.path.join("output", file)
             image = pyexr.open(filepath).get()
             maxvalue = max(maxvalue, np.max(image))
@@ -43,7 +50,7 @@ def normalize_all():
         images[i] = (images[i] * 255).astype(np.uint8)
         #Image.fromarray(images[i]).save(filepaths[i])
 
-def determine_paths(scene, notitle=False, shorttitle=False):
+def determine_paths(scene, accels, notitle=False, shorttitle=False):
     global plots_path
     fullsavepath = [sys.argv[0].rstrip("normalize_metrics.py") + "../../plots"]
     fullsavepath.append("visualizations")
@@ -55,6 +62,11 @@ def determine_paths(scene, notitle=False, shorttitle=False):
         if not os.path.exists(savepath): os.mkdir(savepath)
     plots_path = savepath
     savepath += test_name
+    if accels:
+        _accels = accels[0]
+        for accel in accels[1:]:
+            _accels += ':' + accel
+        savepath += _accels
     if shorttitle: savepath += "_shorttitle"
     if notitle: savepath += "_notitle"
     savepath += ".pdf"
@@ -106,15 +118,17 @@ def exec():
 
     scene = str(sys.argv[1])
     integrator = str(sys.argv[2])
+    if len(sys.argv > 3): accels = str(sys.argv[3]).split(',')
+    else: accels = None
 
     print("\nnormalize_metrics.py:\n\tScene: ", scene)
     print("\tType:", integrator.split('=')[1])
 
     prefix = scene + '-' + integrator
-    savepath = determine_paths(scene, args.notitle, args.shorttitle)
+    savepath = determine_paths(scene, accels, args.notitle, args.shorttitle)
     print("\tPath:", savepath)
     print("Converting Images to PNG...")
-    read_and_save_input(prefix)
+    read_and_save_input(prefix, accels)
     print("Normalizing and Colormapping Images...")
     normalize_all()
     print("Creating Plot...")
