@@ -111,7 +111,7 @@ def exec():
     print("\tType:", integrator.split('=')[1])
 
     prefix = scene + '-' + integrator
-    savepath = determine_paths(scene)
+    savepath = determine_paths(scene, args.notitle, args.shorttitle)
     print("\tPath:", savepath)
     print("Converting Images to PNG...")
     read_and_save_input(prefix)
