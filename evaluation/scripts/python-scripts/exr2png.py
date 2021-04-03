@@ -20,7 +20,7 @@ def exec():
             images.append(image)
             maxvalues.append(np.max(image))
             filepaths.append(filepath)
-            scenename = re.match(r".*(crown|measure-one|villa|killeroo|hair|ecosys|landscape).*", file)
+            scenename = re.match(r".*(crown|measure-one|villa|killeroo|hair|ecosys|landscape).*", file)[1]
             savepaths.append(savepath + scenename + ".png")
     for i in range(len(images)):
         #images[i] *= 16 / maxvalues[i]
