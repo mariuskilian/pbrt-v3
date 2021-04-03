@@ -12,7 +12,14 @@ BVHBFS = "Quantized BVH"
 EMBREE = "Embree BVH"
 KDTREE = "k-d Tree"
 
+ECOSYS="Ecosys"
+CROWN="Crown"
+MEASUREONE="Measure-one"
+HAIR="Hair"
+LANDSCAPE="Landscape"
+
 order={EMBREE:10, BVH:20, BVHBFS:30, KDTREE:40, OCTREE:50, OCTREEBFS:60}
+sceneorder={ECOSYS:10, CROWN:20, MEASUREONE:30, HAIR:40, LANDSCAPE:50}
 
 # === GET VALUES FROM LOG FILES ===
 
@@ -310,6 +317,7 @@ def visualize(title, xlabel, ylabel, xitems, savepath, statlist, plottype):
 def exec():
     # Format input params
     scenes = sys.argv[1].split(',')
+    scenes.sort(key=lambda scene: sceneorder[scene.capitalize()])
     tp, stat = sys.argv[2], ""
     if ':' in tp:
         _ = tp.split(':')
@@ -358,16 +366,13 @@ def exec():
                     if "-bfs" in file: accellist.append(OCTREEBFS)
                     else: accellist.append(OCTREE)
     if all(accel == accellist[0] for accel in accellist):
-        filelist, accellist = zip(*[[f,accel] for f,accel in sorted(zip(filelist, accellist))])
+        filelist.sort()
     else:
         def sort(pair):
-            res = ""
-            if len(scenes) > 1: res += pair[0].split('/')[0]
-            res += str(order[pair[1]])
-            return res
+            return (sceneorder[pair[0].split('/')[0].capitalize()], order[pair[1]])
         filelist, accellist = zip(*[[f,accel] for f,accel in sorted(zip(filelist, accellist), key = lambda pair: sort(pair))])
-    filelist = list(filelist)
-    accellist = list(accellist)
+        filelist = list(filelist)
+        accellist = list(accellist)
 
     # Retrieve stat for every different file
     statlist = []
