@@ -1,6 +1,7 @@
 set -e
 
 SCENES=$1
+ACCELS=$2
 
 INTGR="metric=leafnodes"
 SOURCE=../../..
@@ -39,7 +40,7 @@ fi
 SCENE_LIST=($(echo $SCENES | tr "," "\n"))
 for i in $(seq 0 1 $((${#SCENE_LIST[@]} - 1))); do
     SCENE=${SCENE_LIST[$i]}
-    python3 $PYSCRIPTS/normalize_metrics.py $SCENE $INTGR
-    python3 $PYSCRIPTS/normalize_metrics.py $SCENE $INTGR --notitle
-    python3 $PYSCRIPTS/normalize_metrics.py $SCENE $INTGR --shorttitle
+    python3 $PYSCRIPTS/normalize_metrics.py $SCENE $INTGR $ACCELS
+    python3 $PYSCRIPTS/normalize_metrics.py $SCENE $INTGR $ACCELS --notitle
+    python3 $PYSCRIPTS/normalize_metrics.py $SCENE $INTGR $ACCELS --shorttitle
 done
