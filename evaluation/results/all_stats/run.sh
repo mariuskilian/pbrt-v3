@@ -44,3 +44,6 @@ $PLOT stat:node --plot
 $PLOT dist:primitive --plot
 $PLOT dist:leafnode --plot
 $PLOT dist:node --plot
+$PLOT accel:primitive --plot
+$PLOT accel:leafnode --plot
+$PLOT accel:node --plot
