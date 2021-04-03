@@ -20,7 +20,7 @@ def read_and_save_input(prefix, accels):
     global plots_path, images, filepaths, maxvalue
     # Prep variable
     filelist = os.listdir("output")
-    for file in filelist:
+    for file in sorted(filelist, key=lambda f: f.split(prefix)[1][1:-4]):
         iswantedaccel = False
         if accels == None: iswantedaccel = True
         else:
@@ -34,11 +34,6 @@ def read_and_save_input(prefix, accels):
             maxvalue = max(maxvalue, np.max(image))
             images.append(image)
             filepaths.append("output/" + file[:-3] + "png")
-    # Sort by order described in order dictionary above
-    filepaths, images = zip(*[[fp,img] for fp,img in sorted(zip(filepaths,images),
-        key=lambda pair: order[pair[0].split(prefix)[-1].strip('-').split(".png")[0]])])
-    filepaths = list(filepaths)
-    images = list(images)
 
 def normalize_all():
     global images, filepaths, maxvalue
@@ -66,7 +61,7 @@ def determine_paths(scene, accels, notitle=False, shorttitle=False):
         _accels = accels[0]
         for accel in accels[1:]:
             _accels += ':' + accel
-        savepath += _accels
+        savepath += '_' + _accels
     if shorttitle: savepath += "_shorttitle"
     if notitle: savepath += "_notitle"
     savepath += ".pdf"
