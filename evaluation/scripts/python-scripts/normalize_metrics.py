@@ -9,14 +9,6 @@ import matplotlib.gridspec as gridspec
 import matplotlib.image as mpimg
 import argparse
 
-# imag = pyexr.open("crown.exr").get()
-# imag /= np.max(imag)
-# imag = np.where(imag<=0.0031308,12.92 * imag, 1.055*(imag**(1/2.4)) - 0.055)
-# viridis = cm.get_cmap('viridis', 255)
-# imag = viridis(imag[:,:,0])
-# imag = (imag * 255).astype(np.uint8)
-# Image.fromarray(imag).save("crown_3.png")
-
 plots_path = ""
 images = []
 filepaths = []
@@ -49,7 +41,7 @@ def normalize_all():
         viridis = cm.get_cmap('viridis', 255)
         images[i] = viridis(images[i][:,:,0])
         images[i] = (images[i] * 255).astype(np.uint8)
-        Image.fromarray(images[i]).save(filepaths[i])
+        #Image.fromarray(images[i]).save(filepaths[i])
 
 def determine_paths(scene):
     global plots_path
