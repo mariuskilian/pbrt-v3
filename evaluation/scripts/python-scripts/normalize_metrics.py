@@ -14,18 +14,18 @@ images = []
 filepaths = []
 maxvalue = 0
 
-order={"embree":0, "bvh":10, "bvh-bfs":20, "kdtree":30, "octree":40, "octree-bfs":50}
+order={"embree":10, "bvh":20, "bvh-bfs":30, "kdtree":40, "octree":50, "octree-bfs":60}
 
 def read_and_save_input(prefix, accels):
     global plots_path, images, filepaths, maxvalue
     # Prep variable
     filelist = os.listdir("output")
-    for file in sorted(filelist, key=lambda f: f.split(prefix)[1][1:-4]):
+    for file in sorted(filelist, key=lambda f: order[f.split(prefix.split('=')[1])[1][1:-4]]):
         iswantedaccel = False
         if accels == None: iswantedaccel = True
         else:
             for accel in accels:
-                if accel == file.split(prefix)[1:-4]:
+                if accel == file.split(prefix.split('=')[1])[1][1:-4]:
                     iswantedaccel = True
                     break
         if iswantedaccel and file.endswith(".exr") and file.startswith(prefix):
@@ -34,6 +34,7 @@ def read_and_save_input(prefix, accels):
             maxvalue = max(maxvalue, np.max(image))
             images.append(image)
             filepaths.append("output/" + file[:-3] + "png")
+    print(filepaths)
 
 def normalize_all():
     global images, filepaths, maxvalue
