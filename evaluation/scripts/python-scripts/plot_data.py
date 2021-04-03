@@ -193,7 +193,7 @@ def get_info(scenes, accellist, filelist, tp, stat):
             ylabel += "Total Structure"
         else:
             ylabel += stat.capitalize()
-        ylabel += " (MiB)"
+        ylabel += " (MB)"
     if tp == "memprof":
         ylabel += "Execution Time (s) * Size of "
         if stat == "":
@@ -304,8 +304,6 @@ def visualize(title, xlabel, ylabel, xitems, savepath, statlist, plottype):
     plt.suptitle("\n".join(wrap(title, 55)), y=1)
     plt.ylabel(ylabel)
     plt.xlabel(xlabel)
-    plt.xticks(fontsize=8)
-    plt.yticks(fontsize=8)
 
 # === MAIN FUNCTION ===
 
