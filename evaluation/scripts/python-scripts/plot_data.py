@@ -308,7 +308,7 @@ def visualize(title, xlabel, ylabel, xitems, savepath, statlist, plottype):
     ax = fig.subplots()
     plot(ax, xitems, statlist)
     # Meta
-    plt.suptitle("\n".join(wrap(title, 55)), y=1)
+    # plt.suptitle("\n".join(wrap(title, 55)), y=1)
     plt.ylabel(ylabel)
     plt.xlabel(xlabel)
 
